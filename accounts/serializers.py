@@ -18,3 +18,18 @@ class RegisterSerializer(serializers.ModelSerializer):
  
     def create(self, validated_data):
         return User.objects.create_user(**validated_data)
+
+
+class LogoutSerializer(serializers.Serializer):
+    """Request body shape for logout"""
+ 
+    refresh = serializers.CharField()
+ 
+ 
+class UserSerializer(serializers.ModelSerializer):
+    """Representation of the user for viewing and updating their profile."""
+
+    class Meta:
+        model = User
+        fields = ["id", "email", "full_name", "date_joined"]
+        read_only_fields = ["id", "email", "date_joined"] 
