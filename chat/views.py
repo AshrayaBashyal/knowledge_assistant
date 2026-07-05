@@ -4,14 +4,37 @@ from collections.abc import Iterator
 from django.http import StreamingHttpResponse
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from langchain_core.messages import HumanMessage, SystemMessage
-from rest_framework import permissions
+from rest_framework import generics, permissions
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
-from chat.serializers import ChatMessageInputSerializer
+from chat.models import Conversation, Message
+from chat.serializers import (
+    ChatMessageInputSerializer,
+    ConversationDetailSerializer,
+    ConversationSerializer,
+)
 from llm.providers import get_chat_model
 
 SYSTEM_PROMPT = "You are a helpful knowledge assistant. Answer clearly and concisely."
+
+
+class ConversationListCreateView(generics.ListCreateAPIView):
+    """ 
+    List user's conversations (newest first) or create an empty conversation.
+
+    Note: Empty creation is rarely needed since /stream/ auto-creates conversations.
+    - mainly for "new chat" button before the user has typed anything.
+    """
+    serializer_class = ConversationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Conversation.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
 
 
 def _sse_event(event: str, data: dict) -> str:
