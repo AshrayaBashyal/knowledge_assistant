@@ -36,6 +36,25 @@ class ConversationListCreateView(generics.ListCreateAPIView):
         serializer.save(user=self.request.user)
 
 
+class ConversationDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Handles retrieval (with messages), renaming (title only), and deletion.
+
+    GET: Retrieve conversation and all its messages.
+    PATCH: Rename conversation (title only).
+    DELETE: Delete conversation.
+    """
+ 
+    permission_classes = [permissions.IsAuthenticated]
+ 
+    def get_queryset(self):
+        return Conversation.objects.filter(user=self.request.user)
+ 
+    def get_serializer_class(self):
+        if self.request.method == "GET":
+            return ConversationDetailSerializer
+        return ConversationSerializer
+
 
 def _sse_event(event: str, data: dict) -> str:
     """Formats one Server-Sent Event frame. SSE requires a blank line
