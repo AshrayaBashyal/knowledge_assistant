@@ -29,3 +29,13 @@ class ConversationSerializer(serializers.ModelSerializer):
         fields = ["id", "title", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
 
+
+class ConversationDetailSerializer(ConversationSerializer):
+    """Adds the full message list - only used for the single-conversation
+    GET, not the list view, to avoid pulling every message for every
+    conversation when someone just wants the sidebar list."""
+ 
+    messages = MessageSerializer(many=True, read_only=True)
+ 
+    class Meta(ConversationSerializer.Meta):
+        fields = ConversationSerializer.Meta.fields + ["messages"]
