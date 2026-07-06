@@ -89,26 +89,45 @@ def _to_langchain_messages(history: list[Message]) -> list:
             mapped.append(AIMessage(content=msg.content))
     return mapped
 
-
-def _stream_chat_response(message: str) -> Iterator[str]:
+ 
+def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
     """
-    Generator that yields SSE frames as the model streams tokens.
-
-    event: token -> {"content": "<partial text>"}   (one per chunk)
-    event: done  -> {}                               (stream finished)
-    event: error -> {"detail": "..."}                (provider/network error)
+    Generator that:
+      - tells the client which conversation this is (event: meta)
+      - streams the model's reply token by token (event: token)
+      - saves the full assistant reply once streaming finishes
+      - signals completion (event: done) or failure (event: error)
+ 
+    The user's message is saved by the caller before this generator
+    starts, so it's never lost even if the model call fails.
     """
 
+    yield _sse_event("meta", {"conversation_id": conversation.id})
+ 
+    history = _to_langchain_messages(_load_history(conversation))
+    messages = [SystemMessage(content=SYSTEM_PROMPT), *history]
+ 
     model = get_chat_model()
-    messages = [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=message)]
-
+    full_reply = ""
+ 
     try:
         for chunk in model.stream(messages):
             if chunk.content:
+                full_reply += chunk.content
                 yield _sse_event("token", {"content": chunk.content})
-        yield _sse_event("done", {})
     except Exception as exc:  
         yield _sse_event("error", {"detail": str(exc)})
+        return
+ 
+    if full_reply:
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content=full_reply,
+        )
+        conversation.save(update_fields=["updated_at"])
+ 
+    yield _sse_event("done", {})
 
 
 class ChatStreamView(APIView):
