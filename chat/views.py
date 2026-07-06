@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from django.conf import settings
 from django.http import StreamingHttpResponse
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from rest_framework import generics, permissions
 from rest_framework.request import Request
 from rest_framework.views import APIView
@@ -69,11 +69,25 @@ def _load_history(conversation: Conversation) -> list[Message]:
     Returns up to CHAT_HISTORY_MAX_MESSAGES most recent messages, oldest
     first, so they can be replayed to the model in chronological order.
     """
+
     limit = settings.CHAT_HISTORY_MAX_MESSAGES
     recent = list(conversation.messages.order_by("-created_at")[:limit])
     recent.reverse()
     return recent
  
+
+def _to_langchain_messages(history: list[Message]) -> list:
+    """Maps our stored Message rows onto LangChain's message types, so the
+    model sees the same HumanMessage/AIMessage objects whether they came
+    from the database or from the current request."""
+    
+    mapped = []
+    for msg in history:
+        if msg.role == Message.Role.USER:
+            mapped.append(HumanMessage(content=msg.content))
+        else:
+            mapped.append(AIMessage(content=msg.content))
+    return mapped
 
 
 def _stream_chat_response(message: str) -> Iterator[str]:
