@@ -3,6 +3,7 @@ from collections.abc import Iterator
 
 from django.conf import settings
 from django.http import StreamingHttpResponse
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from rest_framework import generics, permissions
@@ -133,26 +134,46 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
 class ChatStreamView(APIView):
     """
     Streams the assistant's reply via Server-Sent Events.
-    Currently stateless with no conversational memory, but session history will be added later. See _stream_chat_response for event shapes.
+
+    If conversation_id is omitted, a new conversation is created on the
+    fly and its id is sent back as the first SSE frame (event: meta) so
+    the frontend can remember it for the next message. See _stream_chat_response for event shapes.
     """
 
     permission_classes = [permissions.IsAuthenticated]
-
+ 
     @extend_schema(
         tags=["chat"],
         request=ChatMessageInputSerializer,
         responses={
             200: OpenApiResponse(
-                description="text/event-stream of token/done/error frames"
+                description="text/event-stream of meta/token/done/error frames"
             )
         },
     )
     def post(self, request: Request) -> StreamingHttpResponse:
         serializer = ChatMessageInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
+        data = serializer.validated_data
+ 
+        conversation_id = data.get("conversation_id")
+        if conversation_id is not None:
+            conversation = get_object_or_404(
+                Conversation, id=conversation_id, user=request.user
+            )
+        else:
+            conversation = Conversation.objects.create(user=request.user)
+ 
+        # Saved before streaming starts, so the user's message is never
+        # lost even if the model call fails partway through.
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content=data["message"],
+        )
+ 
         response = StreamingHttpResponse(
-            _stream_chat_response(serializer.validated_data["message"]),
+            _stream_chat_response(conversation),
             content_type="text/event-stream",
         )
         response["Cache-Control"] = "no-cache" # Ensure the client gets real-time updates by preventing browser and proxy caching.
