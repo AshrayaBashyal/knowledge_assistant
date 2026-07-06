@@ -1,6 +1,7 @@
 import json
 from collections.abc import Iterator
 
+from django.conf import settings
 from django.http import StreamingHttpResponse
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -56,11 +57,23 @@ class ConversationDetailView(generics.RetrieveUpdateDestroyAPIView):
         return ConversationSerializer
 
 
-def _sse_event(event: str, data: dict) -> str:
+def _sse_event(event: str, data: dict) -> str:          # event_id: ??
     """Formats one Server-Sent Event frame. SSE requires a blank line
     (\\n\\n) to terminate each frame so the client knows where it ends."""
 
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+def _load_history(conversation: Conversation) -> list[Message]:
+    """
+    Returns up to CHAT_HISTORY_MAX_MESSAGES most recent messages, oldest
+    first, so they can be replayed to the model in chronological order.
+    """
+    limit = settings.CHAT_HISTORY_MAX_MESSAGES
+    recent = list(conversation.messages.order_by("-created_at")[:limit])
+    recent.reverse()
+    return recent
+ 
 
 
 def _stream_chat_response(message: str) -> Iterator[str]:
