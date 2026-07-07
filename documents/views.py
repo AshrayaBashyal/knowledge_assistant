@@ -1,7 +1,11 @@
-from rest_framework import permissions, generics
+from django.http import FileResponse
+from django.shortcuts import get_object_or_404
 from documents.models import Document
 from documents.serializers import DocumentSerializer, DocumentUploadSerializer
 from drf_spectacular.utils import extend_schema
+from rest_framework import permissions, generics
+from rest_framework.request import Request
+from rest_framework.views import APIView
 
 @extend_schema(tags=["documents"])
 class DocumentListCreateView(generics.ListCreateAPIView):
@@ -41,3 +45,24 @@ class DocumentDetailView(generics.RetrieveDestroyAPIView):
         instance.file.delete(save=False)  # remove from storage, not just the DB row
         instance.delete()
 
+
+class DocumentDownloadView(APIView):
+    """
+    GET -> download user's document
+ 
+    Streams the raw file to its owner. This exists instead of exposing
+    Django's public MEDIA_URL directly, because these files are private
+    per-user data - a public static URL would let anyone with a guessed
+    link read someone else's document.
+    """
+ 
+    permission_classes = [permissions.IsAuthenticated]
+ 
+    @extend_schema(tags=["documents"], responses={200: bytes})
+    def get(self, request: Request, pk: int) -> FileResponse:
+        document = get_object_or_404(Document, pk=pk, user=request.user)
+        return FileResponse(
+            document.file.open("rb"),
+            as_attachment=True,
+            filename=document.original_filename,
+        )
