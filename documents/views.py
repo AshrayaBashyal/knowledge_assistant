@@ -22,3 +22,22 @@ class DocumentListCreateView(generics.ListCreateAPIView):
  
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+@extend_schema(tags=["documents"])
+class DocumentDetailView(generics.RetrieveDestroyAPIView):
+    """
+    GET <id>/  -> metadata for one document
+    DELETE <id>/  -> removes the DB row and the file on disk
+    """
+ 
+    serializer_class = DocumentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+ 
+    def get_queryset(self):
+        return Document.objects.filter(user=self.request.user)
+ 
+    def perform_destroy(self, instance: Document):
+        instance.file.delete(save=False)  # remove from storage, not just the DB row
+        instance.delete()
+
