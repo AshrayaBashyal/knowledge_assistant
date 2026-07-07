@@ -1,18 +1,26 @@
-from rest_framework import serializers
+from django.conf import settings
+from django.urls import reverse
 from documents.models import Document
 from pathlib import Path
-from django.conf import settings
+from rest_framework import serializers
 
 
 class DocumentSerializer(serializers.ModelSerializer):
     """Read representation - used for list, retrieve, and as the response
     shape after a successful upload."""
  
+    download_url = serializers.SerializerMethodField()
+ 
     class Meta:
         model = Document
-        fields = ["id", "original_filename", "file_type", "uploaded_at"]
-        read_only_fields = ["id", "original_filename", "file_type", "uploaded_at"]
-
+        fields = ["id", "original_filename", "file_type", "uploaded_at", "download_url"]
+        read_only_fields = ["id", "original_filename", "file_type", "uploaded_at", "download_url"]
+ 
+    def get_download_url(self, obj: Document) -> str:
+        request = self.context.get("request")
+        path = reverse("documents:document-download", kwargs={"pk": obj.pk})
+        return request.build_absolute_uri(path) if request else path
+        
 
 class DocumentUploadSerializer(serializers.ModelSerializer):
     """
