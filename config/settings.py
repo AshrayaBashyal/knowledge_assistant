@@ -118,6 +118,10 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:8501").split(",")
 
 
-# --- Chat ---
+#  Chat 
 # Caps how many past messages are replayed to the model on each turn, so prompt size (latency + token cost) stays bounded as a conversation grows.
 CHAT_HISTORY_MAX_MESSAGES = int(os.getenv("CHAT_HISTORY_MAX_MESSAGES", "20"))
+
+#  File Upload
+# Caps the size of the files allowed to be uploaded
+DOCUMENT_MAX_UPLOAD_SIZE_MB = int(os.getenv("DOCUMENT_MAX_UPLOAD_SIZE_MB", "60"))
