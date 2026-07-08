@@ -120,17 +120,21 @@ SIMPLE_JWT = {
  
 CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:8501").split(",")
 
-# Absolute path to the directory that will hold user-uploaded files
-MEDIA_ROOT = BASE_DIR / "media"
-
-# URL that handles the media served from MEDIA_ROOT
-MEDIA_URL = "/media/"
 
 
 #  Chat 
 # Caps how many past messages are replayed to the model on each turn, so prompt size (latency + token cost) stays bounded as a conversation grows.
 CHAT_HISTORY_MAX_MESSAGES = int(os.getenv("CHAT_HISTORY_MAX_MESSAGES", "20"))
 
-#  File Upload
+# Documents:
+# Local disk for now (Django's default FileSystemStorage). Swapping to
+# S3/MinIO later only means changing DEFAULT_FILE_STORAGE + credentials -
+# nothing in documents/models.py or views.py needs to change, since they
+# only ever call `file.open()` / `file.delete()`, never touch paths directly.
+
+# Absolute path to the directory that will hold user-uploaded files
+MEDIA_ROOT = BASE_DIR / "media"
+# URL that handles the media served from MEDIA_ROOT
+MEDIA_URL = "/media/"
 # Caps the size of the files allowed to be uploaded
 DOCUMENT_MAX_UPLOAD_SIZE_MB = int(os.getenv("DOCUMENT_MAX_UPLOAD_SIZE_MB", "60"))
