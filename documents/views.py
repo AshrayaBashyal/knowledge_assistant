@@ -3,11 +3,15 @@ from django.shortcuts import get_object_or_404
 from documents.models import Document
 from documents.serializers import DocumentSerializer, DocumentUploadSerializer
 from drf_spectacular.utils import extend_schema
-from rest_framework import permissions, generics
+from rest_framework import permissions, generics, parsers
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
-@extend_schema(tags=["documents"])
+@extend_schema(
+    tags=["documents"],
+    # Forces Swagger to map the successful return value to DocumentSerializer
+    responses={201: DocumentSerializer}
+    )
 class DocumentListCreateView(generics.ListCreateAPIView):
     """
     GET -> list the user's uploaded documents
@@ -15,6 +19,7 @@ class DocumentListCreateView(generics.ListCreateAPIView):
     """
  
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
  
     def get_queryset(self):
         return Document.objects.filter(user=self.request.user)
