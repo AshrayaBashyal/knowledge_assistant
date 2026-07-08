@@ -31,7 +31,8 @@ INSTALLED_APPS = [
     "accounts",
     "chat",
     "core",
-    "documents"
+    "documents",
+    "retrieval"
 ]
 
 MIDDLEWARE = [
