@@ -28,9 +28,10 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "corsheaders",
     # Local apps
-    "core",
     "accounts",
-    "chat"
+    "chat",
+    "core",
+    "documents"
 ]
 
 MIDDLEWARE = [
@@ -105,6 +106,8 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Knowledge Assistant API",
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+
 }
 
 SIMPLE_JWT = {
