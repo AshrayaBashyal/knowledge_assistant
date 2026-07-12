@@ -24,7 +24,16 @@ def index_document(document: Document) -> DocumentIndex:
 
         vector_store = get_vector_store(document.user_id)
         # Clear any previous chunks for this document first, so re-running indexing (e.g. after a fix) doesn't leave duplicate entries.
-        vector_store.delete(where={"document_id": document.id})
+        # vector_store.delete(where={"document_id": document.id})
+
+        # Delete by reconstructed ids, not a `where` metadata filter.`where` happens to work with Chroma (it forwards **kwargs to theunderlying collection), but that's not part of LangChain'sportable VectorStore interface - a different backend might notsupport it. Chunk ids are deterministic (doc{id}-chunk{i}), sothe exact ids a previous run created can always be reconstructedand deleted directly with `ids=`, which every VectorStoreimplementation supports.
+        #
+        # We delete up to max(previous count, new count), not justrange(len(chunks)): if this re-index produced *fewer* chunksthan before, chunks beyond the new count would otherwise beorphaned in the vector store forever.
+
+        previous_chunk_count = max(index.chunk_count, len(chunks))
+        if previous_chunk_count > 0:
+            stale_ids = [f"doc{document.id}-chunk{i}" for i in range(previous_chunk_count)]
+            vector_store.delete(stale_ids)
 
         ids = [f"doc{document.id}-chunk{i}" for i in range(len(chunks))]
         vector_store.add_documents(chunks, ids=ids)
