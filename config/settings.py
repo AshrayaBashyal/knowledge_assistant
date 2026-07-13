@@ -143,3 +143,4 @@ DOCUMENT_MAX_UPLOAD_SIZE_MB = int(os.getenv("DOCUMENT_MAX_UPLOAD_SIZE_MB", "60")
 
 # Retrieval (RAG) 
 CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR") or str(BASE_DIR / "chroma_data")
+RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "4"))
