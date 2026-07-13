@@ -17,6 +17,7 @@ from chat.serializers import (
     ConversationSerializer,
 )
 from llm.providers import get_chat_model
+from retrieval.retriever import retrieve_relevant_chunks
 
 SYSTEM_PROMPT = "You are a helpful knowledge assistant. Answer clearly and concisely."
 
@@ -127,13 +128,15 @@ def _build_context_message(chunks: list) -> SystemMessage:
     return SystemMessage(content="\n\n".join(parts))
 
 
-def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
+def _stream_chat_response(conversation: Conversation, latest_message: str) -> Iterator[str]:
     """
     Generator that:
       - tells the client which conversation this is (event: meta)
       - streams the model's reply token by token (event: token)
       - saves the full assistant reply once streaming finishes
       - signals completion (event: done) or failure (event: error)
+
+    Retrieval runs on every message for now, regardless of whether the question actually needs it - simple, but wasteful when a document collection exists but isn't relevant to what was asked. Later (Agent) will replace this with the model deciding whether to retrieve, using retrieval as a tool instead of an always-on step.
  
     The user's message is saved by the caller before this generator
     starts, so it's never lost even if the model call fails.
@@ -141,8 +144,17 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
 
     yield _sse_event("meta", {"conversation_id": conversation.id})
  
+    chunks = retrieve_relevant_chunks(
+        conversation.user, latest_message, k=settings.RETRIEVAL_TOP_K
+    )
+    if chunks:
+        yield _sse_event("sources", {"sources": _describe_sources(chunks)})
+ 
     history = _to_langchain_messages(_load_history(conversation))
-    messages = [SystemMessage(content=SYSTEM_PROMPT), *history]
+    system_messages = [SystemMessage(content=SYSTEM_PROMPT)]
+    if chunks:
+        system_messages.append(_build_context_message(chunks))
+    messages = [*system_messages, *history]
  
     model = get_chat_model()
     full_reply = ""
