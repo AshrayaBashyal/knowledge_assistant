@@ -195,7 +195,7 @@ class ChatStreamView(APIView):
         request=ChatMessageInputSerializer,
         responses={
             200: OpenApiResponse(
-                description="text/event-stream of meta/token/done/error frames"
+                description="text/event-stream of meta/sources/token/done/error frames"
             )
         },
     )
