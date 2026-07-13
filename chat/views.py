@@ -221,7 +221,7 @@ class ChatStreamView(APIView):
         )
  
         response = StreamingHttpResponse(
-            _stream_chat_response(conversation),
+            _stream_chat_response(conversation, data["message"]),
             content_type="text/event-stream",
         )
         response["Cache-Control"] = "no-cache" # Ensure the client gets real-time updates by preventing browser and proxy caching.
