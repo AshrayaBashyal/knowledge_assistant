@@ -1,6 +1,7 @@
 import os
 from langchain_core.embeddings import Embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
+from django.conf import settings
 
 def get_embeddings() -> Embeddings:
     """
@@ -12,5 +13,6 @@ def get_embeddings() -> Embeddings:
     inside the function to prevent the slow loading of PyTorch and 
     sentence-transformers dependencies unless this specific function is called.
     """
-    model_name = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    # model_name = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    model_name = settings.EMBEDDING_MODEL
     return HuggingFaceEmbeddings(model_name=model_name)
