@@ -90,7 +90,43 @@ def _to_langchain_messages(history: list[Message]) -> list:
             mapped.append(AIMessage(content=msg.content))
     return mapped
 
- 
+
+def _describe_sources(chunks: list) -> list[dict]:
+    """Turns retrieved LangChain Documents into a small JSON-friendly
+    shape for the `sources` SSE event, so the frontend can show which
+    documents/chunks informed the answer."""
+
+    return [
+        {
+            "document_title": chunk.metadata.get("document_title", "unknown"),
+            "chunk_index": chunk.metadata.get("chunk_index"),
+            # "page_number": chunk.metadata.get("page")    # -page may start from index 0
+        }
+        for chunk in chunks
+    ]
+
+
+def _build_context_message(chunks: list) -> SystemMessage:
+    """Formats retrieved chunks into a single system message, numbered so
+    the model can refer back to them (e.g. "[Source 1]") in its reply."""
+
+    parts = [
+        "Use the following retrieved context if it helps answer the user's question. When you use it, reference it as [Source N]."
+    ]
+    for i, chunk in enumerate(chunks, start=1):
+        title = chunk.metadata.get("document_title", "unknown")
+        
+        # --- If Used 'page' metadata:
+        # page = chunk.metadata.get("page_number")   # use something like raw_page and them if rw_page, add 1. or in split_into_chunks function
+        # Build page string conditionally 
+        # page_str = f", Page {page}" if page is not None else ""
+        # parts.append(f"[Source {i}: {title}{page_str}]\n{chunk.page_content}")
+        
+        parts.append(f"[Source {i}: {title}]\n{chunk.page_content}")
+        
+    return SystemMessage(content="\n\n".join(parts))
+
+
 def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
     """
     Generator that:
