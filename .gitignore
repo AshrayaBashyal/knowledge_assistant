@@ -1,6 +1,7 @@
 # ==========================================
 # Python & Bytecode
 # ==========================================
+chroma_data   # for chroma 
 __pycache__/
 *.py[cod]
 *$py.class
