@@ -17,6 +17,7 @@ from chat.serializers import (
     ConversationSerializer,
 )
 from llm.providers import get_chat_model
+from retrieval.retriever import retrieve_relevant_chunks
 
 SYSTEM_PROMPT = "You are a helpful knowledge assistant. Answer clearly and concisely."
 
@@ -90,14 +91,52 @@ def _to_langchain_messages(history: list[Message]) -> list:
             mapped.append(AIMessage(content=msg.content))
     return mapped
 
- 
-def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
+
+def _describe_sources(chunks: list) -> list[dict]:
+    """Turns retrieved LangChain Documents into a small JSON-friendly
+    shape for the `sources` SSE event, so the frontend can show which
+    documents/chunks informed the answer."""
+
+    return [
+        {
+            "document_title": chunk.metadata.get("document_title", "unknown"),
+            "chunk_index": chunk.metadata.get("chunk_index"),
+            # "page_number": chunk.metadata.get("page")    # -page may start from index 0
+        }
+        for chunk in chunks
+    ]
+
+
+def _build_context_message(chunks: list) -> SystemMessage:
+    """Formats retrieved chunks into a single system message, numbered so
+    the model can refer back to them (e.g. "[Source 1]") in its reply."""
+
+    parts = [
+        "Use the following retrieved context if it helps answer the user's question. When you use it, reference it as [Source N]."
+    ]
+    for i, chunk in enumerate(chunks, start=1):
+        title = chunk.metadata.get("document_title", "unknown")
+        
+        # --- If Used 'page' metadata:
+        # page = chunk.metadata.get("page_number")   # use something like raw_page and them if rw_page, add 1. or in split_into_chunks function
+        # Build page string conditionally 
+        # page_str = f", Page {page}" if page is not None else ""
+        # parts.append(f"[Source {i}: {title}{page_str}]\n{chunk.page_content}")
+        
+        parts.append(f"[Source {i}: {title}]\n{chunk.page_content}")
+        
+    return SystemMessage(content="\n\n".join(parts))
+
+
+def _stream_chat_response(conversation: Conversation, latest_message: str) -> Iterator[str]:
     """
     Generator that:
       - tells the client which conversation this is (event: meta)
       - streams the model's reply token by token (event: token)
       - saves the full assistant reply once streaming finishes
       - signals completion (event: done) or failure (event: error)
+
+    Retrieval runs on every message for now, regardless of whether the question actually needs it - simple, but wasteful when a document collection exists but isn't relevant to what was asked. Later (Agent) will replace this with the model deciding whether to retrieve, using retrieval as a tool instead of an always-on step.
  
     The user's message is saved by the caller before this generator
     starts, so it's never lost even if the model call fails.
@@ -105,8 +144,17 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
 
     yield _sse_event("meta", {"conversation_id": conversation.id})
  
+    chunks = retrieve_relevant_chunks(
+        conversation.user, latest_message, k=settings.RETRIEVAL_TOP_K
+    )
+    if chunks:
+        yield _sse_event("sources", {"sources": _describe_sources(chunks)})
+ 
     history = _to_langchain_messages(_load_history(conversation))
-    messages = [SystemMessage(content=SYSTEM_PROMPT), *history]
+    system_messages = [SystemMessage(content=SYSTEM_PROMPT)]
+    if chunks:
+        system_messages.append(_build_context_message(chunks))
+    messages = [*system_messages, *history]
  
     model = get_chat_model()
     full_reply = ""
@@ -147,7 +195,7 @@ class ChatStreamView(APIView):
         request=ChatMessageInputSerializer,
         responses={
             200: OpenApiResponse(
-                description="text/event-stream of meta/token/done/error frames"
+                description="text/event-stream of meta/sources/token/done/error frames"
             )
         },
     )
@@ -173,7 +221,7 @@ class ChatStreamView(APIView):
         )
  
         response = StreamingHttpResponse(
-            _stream_chat_response(conversation),
+            _stream_chat_response(conversation, data["message"]),
             content_type="text/event-stream",
         )
         response["Cache-Control"] = "no-cache" # Ensure the client gets real-time updates by preventing browser and proxy caching.
