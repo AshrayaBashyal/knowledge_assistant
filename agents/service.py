@@ -10,8 +10,11 @@ SYSTEM_PROMPT = (
     "user's own uploaded documents, use calculator for arithmetic instead "
     "of computing it yourself, and use current_time if the date/time is "
     "relevant. Don't use a tool when you don't need one - answer directly "
-    "for general knowledge questions."
+    "for general knowledge questions. When you use information returned "
+    "by search_my_documents, reference it in your answer using its "
+    "[Source N] label so the user knows which document it came from."
 )
+ 
 
 
 def build_agent(user, sources_sink: list):
