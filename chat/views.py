@@ -16,8 +16,10 @@ from chat.serializers import (
     ConversationDetailSerializer,
     ConversationSerializer,
 )
-from llm.providers import get_chat_model
-from retrieval.retriever import retrieve_relevant_chunks
+
+from agents.service import build_agent
+# from llm.providers import get_chat_model
+# from retrieval.retriever import retrieve_relevant_chunks
 
 SYSTEM_PROMPT = "You are a helpful knowledge assistant. Answer clearly and concisely."
 
@@ -78,18 +80,11 @@ def _load_history(conversation: Conversation) -> list[Message]:
     return recent
  
 
-def _to_langchain_messages(history: list[Message]) -> list:
-    """Maps our stored Message rows onto LangChain's message types, so the
-    model sees the same HumanMessage/AIMessage objects whether they came
-    from the database or from the current request."""
-    
-    mapped = []
-    for msg in history:
-        if msg.role == Message.Role.USER:
-            mapped.append(HumanMessage(content=msg.content))
-        else:
-            mapped.append(AIMessage(content=msg.content))
-    return mapped
+def _to_agent_input(history: list[Message]) -> list[dict]:
+    """Converts stored messages into the plain {role, content} dict shape
+    create_agent expects. Roles map directly since our Message.Role
+    choices ("user"/"assistant") already match the agent's vocabulary."""
+    return [{"role": msg.role, "content": msg.content} for msg in history]
 
 
 def _describe_sources(chunks: list) -> list[dict]:
@@ -105,27 +100,6 @@ def _describe_sources(chunks: list) -> list[dict]:
         }
         for chunk in chunks
     ]
-
-
-def _build_context_message(chunks: list) -> SystemMessage:
-    """Formats retrieved chunks into a single system message, numbered so
-    the model can refer back to them (e.g. "[Source 1]") in its reply."""
-
-    parts = [
-        "Use the following retrieved context if it helps answer the user's question. When you use it, reference it as [Source N]."
-    ]
-    for i, chunk in enumerate(chunks, start=1):
-        title = chunk.metadata.get("document_title", "unknown")
-        
-        # --- If Used 'page' metadata:
-        # page = chunk.metadata.get("page_number")   # use something like raw_page and them if rw_page, add 1. or in split_into_chunks function
-        # Build page string conditionally 
-        # page_str = f", Page {page}" if page is not None else ""
-        # parts.append(f"[Source {i}: {title}{page_str}]\n{chunk.page_content}")
-        
-        parts.append(f"[Source {i}: {title}]\n{chunk.page_content}")
-        
-    return SystemMessage(content="\n\n".join(parts))
 
 
 def _stream_chat_response(conversation: Conversation, latest_message: str) -> Iterator[str]:
@@ -227,3 +201,53 @@ class ChatStreamView(APIView):
         response["Cache-Control"] = "no-cache" # Ensure the client gets real-time updates by preventing browser and proxy caching.
         response["X-Accel-Buffering"] = "no"  # disable Nginx/proxy buffering the SSE stream so events deliver instantly, if any
         return response
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Removed as it doesnt show errors properly .......... ..........
+# def _to_langchain_messages(history: list[Message]) -> list:
+#     """Maps our stored Message rows onto LangChain's message types, so the
+#     model sees the same HumanMessage/AIMessage objects whether they came
+#     from the database or from the current request."""
+    
+#     mapped = []
+#     for msg in history:
+#         if msg.role == Message.Role.USER:
+#             mapped.append(HumanMessage(content=msg.content))
+#         else:
+#             mapped.append(AIMessage(content=msg.content))
+#     return mapped
+
+
+ 
+# moved to tools/ retrieval_tool .......... ..........
+# def _build_context_message(chunks: list) -> SystemMessage:
+#     """Formats retrieved chunks into a single system message, numbered so
+#     the model can refer back to them (e.g. "[Source 1]") in its reply."""
+
+#     parts = [
+#         "Use the following retrieved context if it helps answer the user's question. When you use it, reference it as [Source N]."
+#     ]
+#     for i, chunk in enumerate(chunks, start=1):
+#         title = chunk.metadata.get("document_title", "unknown")
+        
+#         # --- If Used 'page' metadata:
+#         # page = chunk.metadata.get("page_number")   # use something like raw_page and them if rw_page, add 1. or in split_into_chunks function
+#         # Build page string conditionally 
+#         # page_str = f", Page {page}" if page is not None else ""
+#         # parts.append(f"[Source {i}: {title}{page_str}]\n{chunk.page_content}")
+        
+#         parts.append(f"[Source {i}: {title}]\n{chunk.page_content}")
+        
+#     return SystemMessage(content="\n\n".join(parts))
