@@ -23,7 +23,7 @@ def build_agent(user, sources_sink: list):
     
     Building an agent is cheap/fast because it only configures memory and code references and not perform any network calls, database queries, or heavy file read/write operations (I/O). Making a new one  per request cleanly isolates user data without extra tracking.
     
-    We don't use LangGraph's checkpointer or thread history here even though create_agent supports persisting conversation state itself. Postgres is our single source of truth for chat history, so we pass the full log on every call to avoid data to drift out of sink.
+    We don't use LangGraph's checkpointer or thread history here even though create_agent supports persisting conversation state itself. Postgres is our single source of truth for chat history, so we pass the full log on every call to avoid data to drift out of sync.
 
     Should only switch to LangGraph's native checkpointer memory if, we plan to build complex, multi-step state machines.
     """
