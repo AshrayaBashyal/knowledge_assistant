@@ -102,46 +102,118 @@ def _describe_sources(chunks: list) -> list[dict]:
     ]
 
 
-def _stream_chat_response(conversation: Conversation, latest_message: str) -> Iterator[str]:
+def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
     """
     Generator that:
       - tells the client which conversation this is (event: meta)
-      - streams the model's reply token by token (event: token)
+      -  runs the agent, which decides for itself whether to call a tool (retrieval, calculator, current_time) or just answer directly
+      - announces each tool call as it happens (event: tool_call), and document sources specifically when search_my_documents was used (event: sources)
+      - streams the assistant's own text token by token (event: token) - tool-call chunks and the tools node's raw output are filtered out, since neither is text meant for the user to read
       - saves the full assistant reply once streaming finishes
       - signals completion (event: done) or failure (event: error)
 
-    Retrieval runs on every message for now, regardless of whether the question actually needs it - simple, but wasteful when a document collection exists but isn't relevant to what was asked. Later (Agent) will replace this with the model deciding whether to retrieve, using retrieval as a tool instead of an always-on step.
- 
-    The user's message is saved by the caller before this generator
-    starts, so it's never lost even if the model call fails.
+    Retrieval  used to run on every message regardless of whether the question actually needed it - simple, but wasteful when a document collection exists but isn't relevant to what was asked. Now, the AGENT  chooses whether retrieval (or any tool) is relevant per message, instead of a similarity search running on every single request.
+
+    The user's message is saved by the caller before this generator starts, so it's never lost even if the model call fails.
+    
+    --------------------------------
+
+    (X)- LANGGRAPH MULTI-MODE STREAMING ARCHITECTURE REFERENCE:
+
+    We use `stream_mode=["updates", "messages"]`. This instructs LangGraph to blend two distinct data streams into a single loop. Each iteration yields a tuple: `(mode, chunk)`.
+
+    1. `mode == "updates"` (Node Execution Completion)
+       - Triggered ONLY when a graph node completes its entire step execution.
+       - The `chunk` is a dictionary tracking state changes, keyed by the node name.
+       - Structure:
+         {
+             "tools": {  # Key is the node name that executed
+                 "messages": [
+                     ToolMessage(content="Doc content...", name="search_my_documents", tool_call_id="id_1")
+                 ]
+             }
+         }
+
+    2. `mode == "messages"` (Token-by-Token LLM Generation)
+       - Triggered continually as the LLM streams raw tokens for text or tool definitions.
+       - The `chunk` is a 2-tuple: `(token, metadata)`
+       - `token` is an AIMessageChunk object. It can contain text (.content) OR tool directions (.tool_calls).
+       - `metadata` is a dict containing graph tracking context, such as which node emitted the token.
+       - Structures:
+         - Text Token Chunk:        (AIMessageChunk(content="Hello", tool_calls=[]), {"langgraph_node": "agent"})
+         - Tool Call Request Chunk: (AIMessageChunk(content="", tool_calls=[{"name": "calculator", ...}]), {"langgraph_node": "agent"})
+         - Raw Tool Output Chunk:   (AIMessageChunk(content="Execution log...", ...), {"langgraph_node": "tools"})
     """
 
+    # Transmit the conversation ID immediately to the frontend before any AI processing latency begins.
     yield _sse_event("meta", {"conversation_id": conversation.id})
  
-    chunks = retrieve_relevant_chunks(
-        conversation.user, latest_message, k=settings.RETRIEVAL_TOP_K
-    )
-    if chunks:
-        yield _sse_event("sources", {"sources": _describe_sources(chunks)})
+    # Load recent chat entries from PostgreSQL database and format it
+    history = _load_history(conversation)
+    agent_input = {"messages": _to_agent_input(history)}
  
-    history = _to_langchain_messages(_load_history(conversation))
-    system_messages = [SystemMessage(content=SYSTEM_PROMPT)]
-    if chunks:
-        system_messages.append(_build_context_message(chunks))
-    messages = [*system_messages, *history]
+    # A temporary storage array passed by reference into our tools.
+    # The 'search_my_documents' tool will append its raw source document objects here during execution.
+    sources_sink: list = []
+    agent = build_agent(conversation.user, sources_sink)
  
-    model = get_chat_model()
     full_reply = ""
+    tools_used: set[str] = set()
  
     try:
-        for chunk in model.stream(messages):
-            if chunk.content:
-                full_reply += chunk.content
-                yield _sse_event("token", {"content": chunk.content})
+        # Loop through the combined updates and token message streams simultaneously
+        for mode, chunk in agent.stream(
+            agent_input, stream_mode=["updates", "messages"]
+        ):
+            # BRANCH A: NODE UPDATES (Detecting when tools run and extracting sources)
+            if mode == "updates":
+                # Check if the completed node update came from the "tools" executor node
+                tool_update = chunk.get("tools")
+                if not tool_update:
+                    continue  # Ignore updates from non-tool nodes (e.g., the base agent node)
+                
+                # Scan through all the tool messages produced during this step
+                for tool_message in tool_update.get("messages", []):
+                    tool_name = getattr(tool_message, "name", None)
+                    if not tool_name or tool_name in tools_used:
+                        continue  # Skip invalid entries or tools we already broadcasted to the UI
+                    
+                    # Deduplicate: Track this tool so we don't alert the UI multiple times for one call
+                    tools_used.add(tool_name)
+                    yield _sse_event("tool_call", {"tool": tool_name})
+                    
+                    # If the executed tool was our document vector retriever, safely serialize and transmit the found document sources currently sitting inside our sink array.
+                    if tool_name == "search_my_documents" and sources_sink:
+                        yield _sse_event(
+                            "sources", {"sources": _describe_sources(sources_sink)}
+                        )
+                continue  # Advance to the next stream iteration
+ 
+            # BRANCH B: TEXT MESSAGES (Streaming visible text tokens to the browser chat)
+            # mode == "messages": chunk is explicitly formatted as a (token, metadata) tuple
+            token, metadata = chunk
+            
+            # FILTER 1: Skip raw text data passing straight out of the tool node itself.
+            # This is backend log/database text, not copy edited answer text meant for a user.
+            if metadata.get("langgraph_node") == "tools":
+                continue  
+                
+            # FILTER 2: Skip structural tool arguments and function call setups.
+            # If the model is outputting internal JSON schemas to configure a tool, keep it hidden from the UI.
+            if getattr(token, "tool_calls", None):
+                continue  
+                
+            # OUTPUT: If the token survives the filters and contains genuine message text, save it to the complete buffer string and push the raw text segment to the client UI.
+            if token.content:
+                full_reply += token.content
+                yield _sse_event("token", {"content": token.content})
+                
     except Exception as exc:  
+        # Catch network timeouts, provider downtime, or code failures, and surface them cleanly to the frontend UI
         yield _sse_event("error", {"detail": str(exc)})
         return
  
+    # Once the streaming loop finishes successfully, write the completely assembled response text back into PostgreSQL as a permanent ASSISTANT history log row.
     if full_reply:
         Message.objects.create(
             conversation=conversation,
@@ -150,6 +222,7 @@ def _stream_chat_response(conversation: Conversation, latest_message: str) -> It
         )
         conversation.save(update_fields=["updated_at"])
  
+    # Broadcast final termination packet to inform the frontend JavaScript client it can close the SSE connection.
     yield _sse_event("done", {})
 
 
@@ -169,7 +242,7 @@ class ChatStreamView(APIView):
         request=ChatMessageInputSerializer,
         responses={
             200: OpenApiResponse(
-                description="text/event-stream of meta/sources/token/done/error frames"
+                description="text/event-stream of meta/tool_call/sources/token/done/error frames"
             )
         },
     )
