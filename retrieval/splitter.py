@@ -7,7 +7,7 @@ from documents.models import Document
 
 
 CHUNK_SIZE = settings.CHUNK_SIZE
-CHUNK_OVERLAP = overlap = settings.CHUNK_OVERLAP 
+CHUNK_OVERLAP = settings.CHUNK_OVERLAP 
 
 
 def split_into_chunks(document: Document, raw_docs: list[LCDocument]) -> list[LCDocument]:
