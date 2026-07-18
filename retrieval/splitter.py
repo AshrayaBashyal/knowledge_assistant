@@ -1,4 +1,4 @@
-import os
+from django.conf import settings
 
 from langchain_core.documents import Document as LCDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -6,8 +6,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from documents.models import Document
 
 
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 1000))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 200))
+CHUNK_SIZE = settings.CHUNK_SIZE
+CHUNK_OVERLAP = overlap = settings.CHUNK_OVERLAP 
 
 
 def split_into_chunks(document: Document, raw_docs: list[LCDocument]) -> list[LCDocument]:
