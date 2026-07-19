@@ -1,12 +1,10 @@
 from rest_framework import serializers
- 
-from retrieval.models import DocumentIndex
- 
- 
-class DocumentIndexSerializer(serializers.ModelSerializer):
-    document_id = serializers.IntegerField(source="document.id", read_only=True)
- 
+
+from retrieval.models import ContentIndex
+
+
+class ContentIndexSerializer(serializers.ModelSerializer):
     class Meta:
-        model = DocumentIndex
-        fields = ["document_id", "status", "chunk_count", "error", "indexed_at"]
+        model = ContentIndex
+        fields = ["object_id", "status", "chunk_count", "error", "indexed_at"]
         read_only_fields = fields
