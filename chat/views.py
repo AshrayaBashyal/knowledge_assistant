@@ -5,11 +5,11 @@ from django.conf import settings
 from django.http import StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from rest_framework import generics, permissions
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
+from agents.service import build_agent
 from chat.models import Conversation, Message
 from chat.serializers import (
     ChatMessageInputSerializer,
@@ -17,11 +17,10 @@ from chat.serializers import (
     ConversationSerializer,
 )
 
-from agents.service import build_agent
 # from llm.providers import get_chat_model
 # from retrieval.retriever import retrieve_relevant_chunks
 
-SYSTEM_PROMPT = "You are a helpful knowledge assistant. Answer clearly and concisely."
+# SYSTEM_PROMPT = "You are a helpful knowledge assistant. Answer clearly and concisely."
 
 
 class ConversationListCreateView(generics.ListCreateAPIView):
@@ -90,11 +89,12 @@ def _to_agent_input(history: list[Message]) -> list[dict]:
 def _describe_sources(chunks: list) -> list[dict]:
     """Turns retrieved LangChain Documents into a small JSON-friendly
     shape for the `sources` SSE event, so the frontend can show which
-    documents/chunks informed the answer."""
+    documents/notes/chunks informed the answer."""
 
     return [
         {
-            "document_title": chunk.metadata.get("document_title", "unknown"),
+            "title": chunk.metadata.get("title", "unknown"),
+            "source_type": chunk.metadata.get("source_type", "content"),
             "chunk_index": chunk.metadata.get("chunk_index"),
             # "page_number": chunk.metadata.get("page")    # -page may start from index 0
         }
@@ -183,7 +183,7 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
                     yield _sse_event("tool_call", {"tool": tool_name})
                     
                     # If the executed tool was our document vector retriever, safely serialize and transmit the found document sources currently sitting inside our sink array.
-                    if tool_name == "search_my_documents" and sources_sink:
+                    if tool_name == "search_my_knowledge" and sources_sink:
                         yield _sse_event(
                             "sources", {"sources": _describe_sources(sources_sink)}
                         )
