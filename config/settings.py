@@ -33,7 +33,8 @@ INSTALLED_APPS = [
     "core",
     "documents",
     "retrieval",
-    "notes"
+    "notes",
+    "flashcards"
 ]
 
 MIDDLEWARE = [
