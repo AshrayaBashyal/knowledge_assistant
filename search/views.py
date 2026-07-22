@@ -37,11 +37,11 @@ class WorkspaceSearchView(APIView):
     """
     GET /api/search/?q=<query>
 
-    Full-text search across the user's own documents, notes and chat messages, using Postgres's built-in text searc (SearchVector + SearchRank) rather than the vector store.
+    Full-text search across the user's own documents, notes and chat messages, using Postgres's built-in text search (SearchVector + SearchRank) rather than the vector store.
 
-    This is deliberately not semantic/embedding-based search Workspace Search is a keyword lookup tool for the user to find thei own content quickly, not a retrieval-quality concern - that' what search_my_knowledge (the agent tool, Milestone 6) is for Embedding every chat message just to support this would mean a embedding call on every single turn, forever, for a feature use occasionally.
+    This is deliberately not semantic/embedding-based search Workspace Search is a keyword lookup tool for the user to find thei own content quickly, not a retrieval-quality concern - that' what search_my_knowledge is for Embedding every chat message just to support this would mean a embedding call on every single turn, forever, for a feature use occasionally.
 
-    Ranking caveat worth naming: each source's `rank` i computed independently (SearchRank isn't calibrated acros different tables/ fields), so combining and sorting them together is a approximation, not a rigorously unified relevance score. Good enough fo "find my stuff quickly"; not a research-grade ranking system.
+    Each source's `rank` i computed independently (SearchRank isn't calibrated across different tables/ fields), so combining and sorting them together is a approximation, not a rigorously unified relevance score. Good enough fo "find my stuff quickly"; not a research-grade ranking system.
     """
 
     permission_classes = [permissions.IsAuthenticated]
