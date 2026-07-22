@@ -33,3 +33,27 @@ class FlashcardSet(models.Model):
  
     def __str__(self) -> str:
         return f"Flashcards from {self.source_title}"
+    
+
+class Flashcard(models.Model):
+    class Difficulty(models.TextChoices):
+        EASY = "easy", "Easy"
+        MEDIUM = "medium", "Medium"
+        HARD = "hard", "Hard"
+
+    flashcard_set = models.ForeignKey(
+        FlashcardSet, on_delete=models.CASCADE, related_name="flashcards"
+    )
+    question = models.TextField()
+    answer = models.TextField()
+    difficulty = models.CharField(
+        max_length=16, choices=Difficulty.choices, default=Difficulty.MEDIUM
+    )
+    category = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return self.question[:50]
