@@ -5,5 +5,7 @@ urlpatterns = [
     path("chat/", include("chat.urls")),
     path("documents/", include("documents.urls")),
     path("retrieval/", include("retrieval.urls")),
-    path("notes/", include("notes.urls"))
+    path("notes/", include("notes.urls")),
+    path("search/", include("search.urls")),
+
 ]
