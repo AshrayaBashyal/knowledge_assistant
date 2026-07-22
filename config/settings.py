@@ -151,3 +151,7 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM
 
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 1000))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 200))
+
+
+# workspace-search
+RESULTS_PER_SOURCE = int(os.getenv("RESULTS_PER_SOURCE","10"))

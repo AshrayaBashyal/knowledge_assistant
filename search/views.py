@@ -12,7 +12,10 @@ from documents.models import Document
 from notes.models import Note
 from search.serializers import SearchResultSerializer
 
-RESULTS_PER_SOURCE = 10
+from django.conf import settings
+
+
+RESULTS_PER_SOURCE = settings.RESULTS_PER_SOURCE
 
 
 def _normalized_filename():
