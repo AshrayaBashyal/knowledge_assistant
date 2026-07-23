@@ -19,7 +19,7 @@ from notes.models import Note
 from retrieval.content import get_title
 
 
-SOURCE_MODEL = {"document": Document, "note": Note}
+SOURCE_MODELS = {"document": Document, "note": Note}
 
 
 @extend_schema(tags=["flashcards"])
