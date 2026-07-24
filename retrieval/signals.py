@@ -3,6 +3,7 @@ from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 from documents.models import Document
+from memory.models import Memory
 from notes.models import Note
 from retrieval.content import get_source_type
 from retrieval.indexing import index_content
@@ -18,6 +19,13 @@ def auto_index_note(sender, instance: Note, **kwargs):
     short text field is cheap enough that requiring a separate manual
     step here would just be friction with no real benefit.
     """
+    index_content(instance)
+
+
+@receiver(post_save, sender=Memory)
+def auto_index_memory(sender, instance: Memory, **kwargs):
+    """Same reasoning as auto_index_note - a memory fact is even shorter
+    than a note, so there's no cost worth deferring indexing for."""
     index_content(instance)
 
 
@@ -50,4 +58,9 @@ def cleanup_document_index(sender, instance, **kwargs):
 
 @receiver(post_delete, sender=Note)
 def cleanup_note_index(sender, instance, **kwargs):
+    _cleanup_index(sender, instance, **kwargs)
+
+
+@receiver(post_delete, sender=Memory)
+def cleanup_memory_index(sender, instance, **kwargs):
     _cleanup_index(sender, instance, **kwargs)
