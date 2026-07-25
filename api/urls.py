@@ -7,5 +7,6 @@ urlpatterns = [
     path("retrieval/", include("retrieval.urls")),
     path("notes/", include("notes.urls")),
     path("search/", include("search.urls")),
-    path("flashcards/", include("flashcards.urls"))
+    path("flashcards/", include("flashcards.urls")),
+    path("memory/", include("memory.urls"))
 ]
