@@ -3,6 +3,7 @@ from django.conf import settings
 from tools.calculator import calculator
 from tools.current_time import current_time
 from tools.retrieval_tool import build_retrieval_tool
+from tools.memory_tool import build_remember_tool
 # from tools.web_search_tool import get_web_search_tool
 
 
@@ -16,6 +17,7 @@ def build_tools(user, sources_sink: list) -> list:
         calculator,
         current_time,
         build_retrieval_tool(user, sources_sink),
+        build_remember_tool(user),
     ]
  
     # if settings.TAVILY_API_KEY:
