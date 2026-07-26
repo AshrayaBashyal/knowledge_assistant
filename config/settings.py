@@ -157,3 +157,14 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 200))
 
 # workspace-search
 RESULTS_PER_SOURCE = int(os.getenv("RESULTS_PER_SOURCE","10"))
+
+
+# Celery 
+# Redis is used purely as the message broker (+ result backend for debugging) for now - task status that the app actually queries lives in our own models (ContentIndex, FlashcardSet), not Celery's result backend.
+# Caching/rate-limiting uses of Redis later
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
