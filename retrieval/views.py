@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 
 from documents.models import Document
 from notes.models import Note
-from retrieval.indexing import index_content
+# from retrieval.indexing import index_content
 from retrieval.models import ContentIndex
 from retrieval.serializers import ContentIndexSerializer
 from tasks.retrieval_tasks import index_content_task
