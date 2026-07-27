@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
  
 from documents.models import Document
-from flashcards.generator import generate_flashcards
+# from flashcards.generator import generate_flashcards
 from flashcards.models import Flashcard, FlashcardSet
 from flashcards.serializers import (
     FlashcardSerializer,
@@ -17,6 +17,7 @@ from flashcards.serializers import (
 )
 from notes.models import Note
 from retrieval.content import get_title
+from tasks.flashcards_tasks import generate_flashcards_task
 
 
 SOURCE_MODELS = {"document": Document, "note": Note}
@@ -67,42 +68,40 @@ class GenerateFlashcardsView(APIView):
     POST /api/flashcards/generate/
     body: {"source_type": "document"|"note", "source_id": <int>, "count": <int, optional, default 10, max 30>}
  
-    Generates flashcards from a document or note's content and persists them as a new FlashcardSet. Runs synchronously -  Celery task later makes it not blocking
+    Creates a FlashcardSet immediately (status=pending, no cards yet) and
+    enqueues a Celery task to actually generate them - the LLM call this
+    needs is exactly the kind of latency that shouldn't block an HTTP
+    response. Poll GET /api/flashcards/sets/<id>/ to see when it's done.
     """
- 
+
     permission_classes = [permissions.IsAuthenticated]
- 
+
     @extend_schema(
         tags=["flashcards"],
         request=GenerateFlashcardsInputSerializer,
-        responses={201: FlashcardSetDetailSerializer},
+        responses={202: FlashcardSetDetailSerializer},
     )
     def post(self, request: Request) -> Response:
         serializer = GenerateFlashcardsInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
- 
+
         model_class = SOURCE_MODELS[data["source_type"]]
         obj = get_object_or_404(model_class, pk=data["source_id"], user=request.user)
- 
-        items = generate_flashcards(obj, count=data["count"])
- 
+
         flashcard_set = FlashcardSet.objects.create(
             user=request.user,
             content_type=ContentType.objects.get_for_model(obj),
             object_id=obj.pk,
             source_title=get_title(obj),
         )
-        Flashcard.objects.bulk_create(
-            Flashcard(
-                flashcard_set=flashcard_set,
-                question=item.question,
-                answer=item.answer,
-                difficulty=item.difficulty,
-                category=item.category,
-            )
-            for item in items
+
+        generate_flashcards_task.delay(
+            flashcard_set.id,
+            flashcard_set.content_type_id,
+            flashcard_set.object_id,
+            data["count"],
         )
- 
+
         result_serializer = FlashcardSetDetailSerializer(flashcard_set)
-        return Response(result_serializer.data, status=status.HTTP_201_CREATED)
+        return Response(result_serializer.data, status=status.HTTP_202_ACCEPTED)
