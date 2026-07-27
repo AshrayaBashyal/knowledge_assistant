@@ -17,8 +17,18 @@ class FlashcardSet(models.Model):
     user would reasonably want to keep even after removing the source
     document. `source_title` is cached at generation time precisely so
     the set still displays sensibly if the source is later deleted.
+
+    `status`/`error` exist because generation now runs on a Celery
+    worker: the set row is created immediately so POST /generate/
+    has something to return right away, and this field is how the
+    client finds out whether generation actually finished.
     """
- 
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="flashcard_sets"
     )
@@ -26,6 +36,8 @@ class FlashcardSet(models.Model):
     object_id = models.PositiveIntegerField()
     source = GenericForeignKey("content_type", "object_id")
     source_title = models.CharField(max_length=255)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    error = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
  
     class Meta:
