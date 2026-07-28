@@ -15,7 +15,7 @@ class FlashcardSetSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = FlashcardSet
-        fields = ["id", "source_title", "created_at"]
+        fields = ["id", "source_title", "created_at", "error", "status"]
         read_only_fields = fields
 
 
