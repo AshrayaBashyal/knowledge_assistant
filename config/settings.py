@@ -1,4 +1,5 @@
 import os
+import ssl
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import timedelta
@@ -162,8 +163,21 @@ RESULTS_PER_SOURCE = int(os.getenv("RESULTS_PER_SOURCE","10"))
 # Celery 
 # Redis is used purely as the message broker (+ result backend for debugging) for now - task status that the app actually queries lives in our own models (ContentIndex, FlashcardSet), not Celery's result backend.
 # Caching/rate-limiting uses of Redis later
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+CELERY_BROKER_URL = os.getenv("CELERY_REDIS_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_REDIS_URL", "redis://localhost:6379/0")
+
+# Force both transport drivers to validate the SSL parameters explicitly
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'ssl': {
+        'ssl_cert_reqs': ssl.CERT_REQUIRED
+    }
+}
+CELERY_REDIS_BACKEND_TRANSPORT_OPTIONS = {
+    'ssl': {
+        'ssl_cert_reqs': ssl.CERT_REQUIRED
+    }
+}
+
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
