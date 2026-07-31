@@ -36,7 +36,8 @@ INSTALLED_APPS = [
     "retrieval",
     "notes",
     "flashcards",
-    "memory"
+    "memory",
+    "tasks"
 ]
 
 MIDDLEWARE = [
@@ -48,6 +49,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+     'core.middleware.RequestLoggingMiddleware',
+
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -182,3 +185,58 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+
+
+# --- Logging ---
+# JSON to stdout (captured by whatever process manager/Docker/systemd runs this in production) plus a rotating file, so logs survive a container restart during local development. No custom dashboard here on purpose - LangSmith will covers LLM-specific tracing in far more depth than a hand-built UI would, and Django admin already lets you inspect ContentIndex/FlashcardSet/etc. status directly.
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+ 
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {"()": "core.logging.JSONFormatter"},
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "json",
+        },
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(LOG_DIR / "app.log"),
+            "maxBytes": 10 * 1024 * 1024,  # 10MB  - if bigger new log-file created
+            "backupCount": 5, #When a sixth rotation happens-oldest deleted.
+            "formatter": "json",
+        },
+    },
+    "root": {
+        "handlers": ["console", "file"],
+        "level": os.getenv("LOG_LEVEL", "INFO"),
+    },
+    "loggers": {
+        # Django's own request logger would otherwise double-log every request in its own (non-JSON) format alongside our middleware.
+        "django.server": {"handlers": ["console", "file"], "level": "WARNING", "propagate": False},
+        # "core.request": {"level": "INFO",},
+        # "tools": {"level": "INFO",},
+        # "chat": {"level": "INFO",},
+    },
+}
+
+# Logging hierarchy (simplified)
+#
+# root
+# ├── django
+# │   ├── django.server
+# │   ├── django.request
+# │   ├── django.db.backends
+# │   ├── django.security
+# │   └── django.template
+# │
+# ├── core.request
+# ├── chat
+# ├── tools
+# └── embedding
+#
+# Loggers inherit settings from their parent unless explicitly configured.
