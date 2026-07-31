@@ -1,5 +1,10 @@
+import logging
+import time
+
 from celery import shared_task
 from django.contrib.contenttypes.models import ContentType
+
+logger = logging.getLogger("flashcards.generation")
 
 
 @shared_task
@@ -18,6 +23,8 @@ def generate_flashcards_task(
     content_type = ContentType.objects.get(id=content_type_id)
     obj = content_type.get_object_for_this_type(id=object_id)
 
+    started_at = time.monotonic()
+
     try:
         items = generate_flashcards(obj, count=count)
         Flashcard.objects.bulk_create(
@@ -31,8 +38,29 @@ def generate_flashcards_task(
             for item in items
         )
         flashcard_set.status = FlashcardSet.Status.COMPLETED
+
+        logger.info(
+            "flashcards_generated",
+            extra={
+                "flashcard_set_id": flashcard_set_id,
+                "user_id": flashcard_set.user_id,
+                "card_count": len(items),
+                "duration_ms": round((time.monotonic() - started_at) * 1000, 2),
+            },
+        )
+
     except Exception as exc:
         flashcard_set.status = FlashcardSet.Status.FAILED
         flashcard_set.error = str(exc)
+
+        logger.exception(
+            "flashcard_generation_failed",
+            extra={
+                "flashcard_set_id": flashcard_set_id,
+                "user_id": flashcard_set.user_id,
+                "duration_ms": round((time.monotonic() - started_at) * 1000, 2),
+            },
+        )
+        
     finally:
         flashcard_set.save() 
