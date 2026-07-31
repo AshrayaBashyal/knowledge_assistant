@@ -4,7 +4,7 @@ from tools.calculator import calculator
 from tools.current_time import current_time
 from tools.retrieval_tool import build_retrieval_tool
 from tools.memory_tool import build_remember_tool
-# from tools.web_search_tool import get_web_search_tool
+from tools.web_search_tool import get_web_search_tool
 
 
 def build_tools(user, sources_sink: list) -> list:
@@ -20,7 +20,7 @@ def build_tools(user, sources_sink: list) -> list:
         build_remember_tool(user),
     ]
  
-    # if settings.TAVILY_API_KEY:
-    #     tools.append(get_web_search_tool(max_results=settings.WEB_SEARCH_MAX_RESULTS))
+    if settings.TAVILY_API_KEY:
+        tools.append(get_web_search_tool(max_results=settings.WEB_SEARCH_MAX_RESULTS))
  
     return tools
