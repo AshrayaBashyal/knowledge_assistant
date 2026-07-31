@@ -1,4 +1,6 @@
 import json
+import logging
+import time
 from collections.abc import Iterator
 
 from django.conf import settings
@@ -21,6 +23,9 @@ from chat.serializers import (
 # from retrieval.retriever import retrieve_relevant_chunks
 
 # SYSTEM_PROMPT = "You are a helpful knowledge assistant. Answer clearly and concisely."
+
+
+logger = logging.getLogger("chat.stream")
 
 
 class ConversationListCreateView(generics.ListCreateAPIView):
@@ -115,6 +120,8 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
     Retrieval  used to run on every message regardless of whether the question actually needed it - simple, but wasteful when a document collection exists but isn't relevant to what was asked. Now, the AGENT  chooses whether retrieval (or any tool) is relevant per message, instead of a similarity search running on every single request.
 
     The user's message is saved by the caller before this generator starts, so it's never lost even if the model call fails.
+
+    added structured logging around this same flow: total latency, per-tool duration, token usage (if the provider populates it), and errors - this is the one place all of a chat turn's actual work happens, so it's also the right place to observe it from.
     
     --------------------------------
 
@@ -159,6 +166,10 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
  
     full_reply = ""
     tools_used: set[str] = set()
+
+    tool_call_started_at: dict[str, float] = {}
+    usage_metadata = None
+    turn_started_at = time.monotonic()
  
     try:
         # Loop through the combined updates and token message streams simultaneously
@@ -180,6 +191,25 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
                     
                     # Deduplicate: Track this tool so we don't alert the UI multiple times for one call
                     tools_used.add(tool_name)
+
+                    # Measures how long each tool call takes from the moment the agent decides to use it until the result is returned. This works for all tools, including ones that can't use @log_call, though it also includes a small amount of agent overhead, but the only option that's provider-independent.
+                    started_at = tool_call_started_at.get(tool_name)
+                    duration_ms = (
+                        round((time.monotonic() - started_at) * 1000, 2)
+                        if started_at
+                        else None
+                    )
+                    logger.info(
+                        "tool_call",
+                        extra={
+                            "tool": tool_name,
+                            "duration_ms": duration_ms,
+                            "conversation_id": conversation.id,
+                            "user_id": conversation.user_id,
+                        },
+                    )
+
+
                     yield _sse_event("tool_call", {"tool": tool_name})
                     
                     # If the executed tool was our document vector retriever, safely serialize and transmit the found document sources currently sitting inside our sink array.
@@ -209,6 +239,14 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
                 yield _sse_event("token", {"content": token.content})
                 
     except Exception as exc:  
+        logger.exception(
+            "chat_turn_failed",
+            extra={
+                "conversation_id": conversation.id,
+                "user_id": conversation.user_id,
+                "duration_ms": round((time.monotonic() - turn_started_at) * 1000, 2),
+            },
+        )
         # Catch network timeouts, provider downtime, or code failures, and surface them cleanly to the frontend UI
         yield _sse_event("error", {"detail": str(exc)})
         return
@@ -221,6 +259,19 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
             content=full_reply,
         )
         conversation.save(update_fields=["updated_at"])
+
+        logger.info(
+        "chat_turn",
+        extra={
+            "conversation_id": conversation.id,
+            "user_id": conversation.user_id,
+            "duration_ms": round((time.monotonic() - turn_started_at) * 1000, 2),
+            "tools_used": sorted(tools_used),
+            "input_tokens": (usage_metadata or {}).get("input_tokens"),
+            "output_tokens": (usage_metadata or {}).get("output_tokens"),
+            "total_tokens": (usage_metadata or {}).get("total_tokens"),
+        },
+    )
  
     # Broadcast final termination packet to inform the frontend JavaScript client it can close the SSE connection.
     yield _sse_event("done", {})
