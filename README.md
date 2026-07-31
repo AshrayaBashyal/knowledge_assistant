@@ -40,192 +40,100 @@ The project is organized as a set of focused Django apps:
 flowchart TD
 
 subgraph group_runtime["Django Runtime"]
-
-  node_urls{{"Root URL routing<br/>Django router<br/>[urls.py]"}}
-
-  node_runtime{{"WSGI / ASGI entry<br/>deployment entry<br/>[asgi.py]"}}
-
-  node_middleware["Middleware &amp; logging<br/>cross-cutting<br/>[middleware.py]"]
-
+  node_entrypoints{{"Process Entry Points<br/>Django entry<br/>[manage.py]"}}
+  node_settings["Settings, Middleware & Celery<br/>application configuration<br/>[settings.py]"]
+  node_root_routes["Root URL Routing<br/>request dispatcher<br/>[urls.py]"]
 end
 
-subgraph group_domains["Domain APIs"]
-
-  node_accounts["Accounts API<br/>model-backed API<br/>[views.py]"]
-
-  node_content["Documents &amp; notes API<br/>model-backed API<br/>[views.py]"]
-
-  node_chat["Chat API &amp; records<br/>model-backed API<br/>[views.py]"]
-
-  node_memory["Memory API<br/>model-backed API<br/>[views.py]"]
-
-  node_flashcards["Flashcards API<br/>generated-content API<br/>[views.py]"]
-
-  node_search["Cross-domain search<br/>search API<br/>[views.py]"]
-
+subgraph group_api["HTTP API Layer"]
+  node_api_routes["API Route Composition<br/>URL router<br/>[api/urls.py]"]
+  node_content["Accounts, Documents,<br/>Notes & Memory APIs<br/>[views.py]"]
+  node_chat["Chat API (SSE)<br/>streaming responses<br/>[chat/views.py]"]
+  node_flashcards["Flashcard API<br/>[flashcards/views.py]"]
+  node_search["Search API<br/>[search/views.py]"]
 end
 
-subgraph group_ai["AI Orchestration"]
+subgraph group_storage["Persistent Storage"]
+  node_postgres[("PostgreSQL<br/>Accounts, Documents,<br/>Notes, Memories,<br/>Chats, Flashcards")]
+  node_contentindex[("ContentIndex<br/>Index Status")]
+end
 
-  node_agent_service["Agent execution service<br/>agent orchestrator<br/>[service.py]"]
-
-  node_agent_registry["Agent registry<br/>agent catalog<br/>[registry.py]"]
-
-  node_llm["LLM provider boundary<br/>provider abstraction<br/>[providers.py]"]
-
-  node_tools["Agent tools<br/>tool integrations<br/>[retrieval_tool.py]"]
-
+subgraph group_async["Background Processing"]
+  node_signals["Django Signals<br/>post_save / post_delete"]
+  node_celery["Celery Workers"]
+  node_tasks["Retrieval Tasks"]
 end
 
 subgraph group_retrieval["Retrieval Pipeline"]
-
-  node_ingestion["Load, extract &amp; split<br/>ingestion stages<br/>[loaders.py]"]
-
-  node_indexing["Embedding &amp; index writer<br/>indexing service<br/>[indexing.py]"]
-
-  node_vectorstore[("Vector store<br/>vector infrastructure<br/>[vectorstore.py]")]
-
-  node_retriever["Query retriever<br/>grounding service<br/>[retriever.py]"]
-
+  node_loader["Load & Normalize"]
+  node_chunk["Chunk Text"]
+  node_embed["MiniLM Embeddings"]
+  node_vector[("ChromaDB")]
+  node_retriever["Retriever<br/>Cosine Similarity<br/>Top-K Search"]
 end
 
-subgraph group_async["Background Work"]
+subgraph group_ai["AI Layer"]
+  node_agent["LangChain Agent"]
+  node_llm["Groq LLM"]
 
-  node_celery["Celery workers<br/>async execution<br/>[celery.py]"]
+  node_tools["Agent Tools<br/>search_my_knowledge<br/>remember_fact<br/>tavily_search<br/>calculator<br/>current_time"]
 
-  node_retrieval_tasks["Retrieval tasks<br/>background tasks<br/>[retrieval_tasks.py]"]
-
-  node_flashcard_tasks["Flashcard generation tasks<br/>background tasks"]
-
+  node_flashgen["Flashcard Generator"]
 end
 
-node_database[("Relational database<br/>Django persistence")]
+node_entrypoints --> node_settings
+node_entrypoints --> node_root_routes
+node_root_routes --> node_api_routes
 
-node_runtime -->|"serves HTTP"| node_urls
+node_api_routes --> node_content
+node_api_routes --> node_chat
+node_api_routes --> node_flashcards
+node_api_routes --> node_search
 
-node_urls -->|"routes"| node_accounts
+node_content -->|"CRUD"| node_postgres
+node_chat -->|"Conversation History"| node_postgres
+node_flashcards -->|"Stores Cards"| node_postgres
 
-node_urls -->|"routes"| node_content
+node_content --> node_signals
+node_signals --> node_celery
+node_celery --> node_tasks
 
-node_urls -->|"routes"| node_chat
+node_tasks --> node_loader
+node_loader --> node_chunk
+node_chunk --> node_embed
+node_embed -->|"Store Embeddings"| node_vector
+node_tasks -->|"Update Status"| node_contentindex
 
-node_urls -->|"routes"| node_memory
+node_chat -->|"Invoke"| node_agent
+node_agent --> node_llm
+node_agent --> node_tools
 
-node_urls -->|"routes"| node_flashcards
+node_tools -->|"Retrieve"| node_retriever
+node_retriever -->|"Query"| node_vector
 
-node_urls -->|"routes"| node_search
+node_tools -->|"Create Memory"| node_postgres
+node_postgres --> node_signals
 
-node_middleware -.->|"cross-cuts requests"| node_urls
+node_search -->|"Semantic Search"| node_retriever
 
-node_accounts -->|"persists"| node_database
-
-node_content -->|"persists"| node_database
-
-node_chat -->|"persists records"| node_database
-
-node_memory -->|"persists"| node_database
-
-node_flashcards -->|"persists sets"| node_database
-
-node_chat -->|"executes agent"| node_agent_service
-
-node_agent_service -->|"selects agent"| node_agent_registry
-
-node_agent_service -->|"generates via"| node_llm
-
-node_agent_service -->|"invokes optional tools"| node_tools
-
-node_tools -->|"grounds with"| node_retriever
-
-node_tools -->|"reads and writes"| node_memory
-
-node_content -.->|"triggers indexing"| node_retrieval_tasks
-
-node_retrieval_tasks -->|"queued on"| node_celery
-
-node_celery -->|"runs ingestion"| node_ingestion
-
-node_ingestion -->|"chunks content"| node_indexing
-
-node_indexing -->|"writes vectors"| node_vectorstore
-
-node_indexing -->|"stores index records"| node_database
-
-node_retriever -->|"queries vectors"| node_vectorstore
-
-node_search -->|"retrieves knowledge"| node_retriever
-
-node_flashcards -.->|"requests generation"| node_flashcard_tasks
-
-node_flashcard_tasks -->|"queued on"| node_celery
-
-node_celery -.->|"runs generation"| node_llm
-
-click node_urls "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/config/urls.py"
-
-click node_runtime "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/config/asgi.py"
-
-click node_middleware "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/core/middleware.py"
-
-click node_accounts "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/accounts/views.py"
-
-click node_content "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/documents/views.py"
-
-click node_chat "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/chat/views.py"
-
-click node_memory "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/memory/views.py"
-
-click node_flashcards "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/flashcards/views.py"
-
-click node_search "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/search/views.py"
-
-click node_agent_service "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/agents/service.py"
-
-click node_agent_registry "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/agents/registry.py"
-
-click node_llm "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/llm/providers.py"
-
-click node_tools "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/tools/retrieval_tool.py"
-
-click node_ingestion "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/retrieval/loaders.py"
-
-click node_indexing "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/retrieval/indexing.py"
-
-click node_vectorstore "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/retrieval/vectorstore.py"
-
-click node_retriever "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/retrieval/retriever.py"
-
-click node_celery "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/config/celery.py"
-
-click node_retrieval_tasks "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/tasks/retrieval_tasks.py"
-
-click node_flashcard_tasks "https://github.com/ashrayabashyal/knowledge_assistant/blob/main/tasks/flashcards_tasks.py"
+node_flashcards -->|"Queue"| node_celery
+node_celery --> node_flashgen
+node_flashgen --> node_llm
+node_flashgen --> node_postgres
 
 classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
-
 classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
-
 classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
-
 classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
-
 classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
-
 classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
 
-classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
-
-class node_urls,node_runtime,node_middleware toneBlue
-
-class node_accounts,node_content,node_chat,node_memory,node_flashcards,node_search toneAmber
-
-class node_agent_service,node_agent_registry,node_llm,node_tools toneMint
-
-class node_ingestion,node_indexing,node_vectorstore,node_retriever toneRose
-
-class node_celery,node_retrieval_tasks,node_flashcard_tasks toneIndigo
-
-class node_database toneNeutral
+class node_entrypoints,node_settings,node_root_routes toneBlue
+class node_api_routes,node_content,node_chat,node_flashcards,node_search toneAmber
+class node_postgres,node_contentindex toneNeutral
+class node_signals,node_celery,node_tasks toneIndigo
+class node_loader,node_chunk,node_embed,node_vector,node_retriever toneMint
+class node_agent,node_llm,node_tools,node_flashgen toneRose
 ```
 
 ## Tech Stack
