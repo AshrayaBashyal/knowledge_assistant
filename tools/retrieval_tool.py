@@ -1,4 +1,6 @@
 from langchain_core.tools import tool
+
+from core.logging import log_call
 from retrieval.retriever import retrieve_relevant_chunks
 
 
@@ -14,6 +16,7 @@ def build_retrieval_tool(user, sources_sink: list, k: int = 4):
     """
 
     @tool
+    @log_call("tools.retrieval")
     def search_my_knowledge(query: str) -> str:
         """Search the user's uploaded documents, notes, and remembered facts/preferences for information relevant to `query`. Use this when the question might be answered by the user's own content, not general knowledge."""
 

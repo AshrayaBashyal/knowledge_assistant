@@ -1,6 +1,9 @@
 import ast
 import operator
+
 from langchain_core.tools import tool
+
+from core.logging import log_call
 
 # Strict allowlist of safe mathematical operators
 _ALLOWED_OPERATORS = {
@@ -37,6 +40,7 @@ def _safe_eval(node: ast.AST) -> float:
     raise ValueError("Invalid mathematical syntax.")
 
 @tool
+@log_call("tool.calculator")
 def calculator(expression: str) -> str:
     """Evaluate a basic arithmetic expression (+, -, *, /, %, **, parentheses) 
     and return the numeric result. Use this for any math instead of 

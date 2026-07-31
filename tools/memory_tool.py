@@ -1,5 +1,6 @@
 from langchain_core.tools import tool
 
+from core.logging import log_call
 from memory.models import Memory
 
 
@@ -11,6 +12,7 @@ def build_remember_tool(user):
     """
 
     @tool
+    @log_call("tools.memory")
     def remember_fact(fact: str) -> str:
         """Save a fact or preference about the user that should be recalled in future conversations - e.g. a stated preference, dietary restriction, profession, or recurring detail. Do not use this for one-off details only relevant to the current message."""
         memory = Memory.objects.create(user=user, content=fact)
