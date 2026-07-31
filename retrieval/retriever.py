@@ -5,7 +5,7 @@ from langchain_core.documents import Document as LCDocument
 
 from retrieval.vectorstore import get_vector_store
 
-logger = logging.getLogger("retrieval.retriever")
+logger = logging.getLogger("retrieval.indexing")
 
 def retrieve_relevant_chunks(user, query: str, k: int = 4) -> list[LCDocument]:
     """
