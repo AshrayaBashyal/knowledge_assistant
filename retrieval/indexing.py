@@ -1,3 +1,6 @@
+import logging
+import time
+
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 
@@ -7,6 +10,8 @@ from retrieval.models import ContentIndex
 from retrieval.splitter import split_into_chunks
 from retrieval.vectorstore import get_vector_store
 
+logger = logging.getLogger("retrieval.indexing")
+
 
 def index_content(obj) -> ContentIndex:
     """
@@ -14,13 +19,16 @@ def index_content(obj) -> ContentIndex:
     
     Generic over content type via Django's contenttypes framework - this is what lets one retriever/tool search documents and notes together, ranked by relevance, instead of the agent guessing which of several separate tools to call.
 
-    This runs synchronously (in the request/response cycle) for now,later move this exact function into a Celery task body unchanged - the only difference will be that the HTTP response returns immediately instead of waiting for it to finish.
+    Runs as the body of a Celery task (in tasks/retrieval_tasks.py) - this function's own logic is unchanged from when it ran synchronously, only its caller changed.
     """
 
     content_type = ContentType.objects.get_for_model(obj)
     index, _ = ContentIndex.objects.get_or_create(
         content_type=content_type, object_id=obj.pk
     )
+
+    started_at = time.monotonic()
+    source_type = get_source_type(obj)
 
     try:
         raw_docs = load_content_text(obj)
@@ -30,7 +38,6 @@ def index_content(obj) -> ContentIndex:
             raise ValueError("No extractable text found in this content.")
 
         vector_store = get_vector_store(obj.user_id)
-        source_type = get_source_type(obj)
 
         # Clear any previous chunks for this document first, so re-running indexing (e.g. after a fix) doesn't leave duplicate entries.
         # vector_store.delete(where={"document_id": document.id})
@@ -51,10 +58,32 @@ def index_content(obj) -> ContentIndex:
         index.chunk_count = len(chunks)
         index.error = ""
         index.indexed_at = timezone.now()
+ 
+        logger.info(
+            "indexing_completed",
+            extra={
+                "source_type": source_type,
+                "object_id": obj.pk,
+                "user_id": obj.user_id,
+                "chunk_count": len(chunks),
+                "duration_ms": round((time.monotonic() - started_at) * 1000, 2),
+            },
+        )
+
     except Exception as exc:
         index.status = ContentIndex.Status.FAILED
         index.error = str(exc)
         index.chunk_count = 0
+
+        logger.exception(
+            "indexing_failed",
+            extra={
+                "source_type": source_type,
+                "object_id": obj.pk,
+                "user_id": obj.user_id,
+                "duration_ms": round((time.monotonic() - started_at) * 1000, 2),
+            },
+        )
     finally:
         index.save()
 
