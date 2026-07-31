@@ -1,12 +1,9 @@
 # Knowledge Assistant
 
 ![Python](https://img.shields.io/badge/language-Python-3776AB?logo=python&logoColor=white)
-![Build Status](https://img.shields.io/github/actions/workflow/status/AshrayaBashyal/knowledge_assistant/ci.yml?label=build&branch=main)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 A Django REST Framework backend for an AI-powered **Knowledge Assistant** — combining retrieval-augmented generation (RAG) over your own documents, chat with an LLM, notes, auto-generated flashcards, and long-term memory, all behind a JWT-secured API.
-
-> **Note on badges:** the build badge points at a GitHub Actions workflow (`ci.yml`) that hasn't been added to the repo yet — add one to make it go live.
 
 ## Table of Contents
 
