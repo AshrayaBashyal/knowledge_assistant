@@ -167,23 +167,20 @@ WEB_SEARCH_MAX_RESULTS = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "3"))
 RESULTS_PER_SOURCE = int(os.getenv("RESULTS_PER_SOURCE","10"))
 
 
-# Celery 
+# Celery & Redis setup
 # Redis is used purely as the message broker (+ result backend for debugging) for now - task status that the app actually queries lives in our own models (ContentIndex, FlashcardSet), not Celery's result backend.
 # Caching/rate-limiting uses of Redis later
-CELERY_BROKER_URL = os.getenv("CELERY_REDIS_URL", "redis://localhost:6379/0")
-CELERY_RESULT_BACKEND = os.getenv("CELERY_REDIS_URL", "redis://localhost:6379/0")
+CELERY_REDIS_URL = os.getenv("CELERY_REDIS_URL", "redis://localhost:6379/0")
+CELERY_BROKER_URL = CELERY_REDIS_URL
+CELERY_RESULT_BACKEND = CELERY_REDIS_URL
 
-# Force both transport drivers to validate the SSL parameters explicitly
-CELERY_BROKER_TRANSPORT_OPTIONS = {
-    'ssl': {
-        'ssl_cert_reqs': ssl.CERT_REQUIRED
-    }
-}
-CELERY_REDIS_BACKEND_TRANSPORT_OPTIONS = {
-    'ssl': {
-        'ssl_cert_reqs': ssl.CERT_REQUIRED
-    }
-}
+# Only enforce strict SSL connection details if using a remote secured Redis instance (rediss://)
+if CELERY_REDIS_URL.startswith("rediss://"):
+    CELERY_BROKER_TRANSPORT_OPTIONS = {'ssl': {'ssl_cert_reqs': ssl.CERT_REQUIRED}}
+    CELERY_REDIS_BACKEND_TRANSPORT_OPTIONS = {'ssl': {'ssl_cert_reqs': ssl.CERT_REQUIRED}}
+else:
+    CELERY_BROKER_TRANSPORT_OPTIONS = {}
+    CELERY_REDIS_BACKEND_TRANSPORT_OPTIONS = {}
 
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
