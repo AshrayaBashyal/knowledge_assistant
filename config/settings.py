@@ -158,8 +158,10 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 1000))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 200))
 
-# Tavily search tool
-TAVILY_API_KEY = os.getenv("TAVILY_API_KE")
+# Tavily search Agent tool
+# Web search is optional - only included in the agent's tool list if a key is actually configured
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+WEB_SEARCH_MAX_RESULTS = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "3"))
 
 # workspace-search
 RESULTS_PER_SOURCE = int(os.getenv("RESULTS_PER_SOURCE","10"))
