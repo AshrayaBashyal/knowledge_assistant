@@ -24,4 +24,5 @@ def get_vector_store(user_id: int) -> Chroma:
         collection_name=f"user_{user_id}_documents",
         embedding_function=get_embeddings(),
         persist_directory=str(persist_dir),
+        # collection_metadata={"hnsw:space": "cosine"},    # Configure the HNSW index to compare vectors using cosine distance.
     )
