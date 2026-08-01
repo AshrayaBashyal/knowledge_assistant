@@ -188,7 +188,23 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 
 
-# --- Logging ---
+# LangSmith
+# Unlike GROQ_API_KEY or TAVILY_API_KEY, LangSmith settings are NOT read
+# through Django settings. LangChain reads LANGSMITH_TRACING,
+# LANGSMITH_API_KEY, and LANGSMITH_PROJECT directly from environment
+# variables when it is imported.
+#
+# Since load_dotenv() has already loaded the .env file into os.environ
+# before any LangChain code runs, tracing is enabled automatically for
+# model calls, agent tool calls, and retrieval calls. No extra Django
+# settings or code are required.
+#
+# Adding LANGSMITH_API_KEY to Django settings would have no effect because
+# nothing reads it. See .env.example for the required environment
+# variables.
+
+
+# Logging
 # JSON to stdout (captured by whatever process manager/Docker/systemd runs this in production) plus a rotating file, so logs survive a container restart during local development. No custom dashboard here on purpose - LangSmith will covers LLM-specific tracing in far more depth than a hand-built UI would, and Django admin already lets you inspect ContentIndex/FlashcardSet/etc. status directly.
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
