@@ -17,7 +17,7 @@ from flashcards.serializers import (
 )
 from notes.models import Note
 from retrieval.content import get_title
-from tasks.flashcards_tasks import generate_flashcards_task
+from tasks.flashcard_tasks import generate_flashcards_task
 
 
 SOURCE_MODELS = {"document": Document, "note": Note}
