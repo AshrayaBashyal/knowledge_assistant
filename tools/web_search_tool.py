@@ -15,4 +15,10 @@ def get_web_search_tool(max_results: int = 3) -> TavilySearch:
     covers every tool uniformly regardless of how it's implemented, just
     with coarser timing than the other tools' own instrumentation.
     """
-    return TavilySearch(max_results=max_results)
+    tool = TavilySearch(max_results=max_results)
+
+    tool.name = "web_search"
+
+    tool.description = """Search the public internet for information. Use this tool whenever the user asks about anything that is unlikely to exist in the user's uploaded documents. Do NOT use this tool when the user explicitly asks about their uploaded documents, notes, PDFs, or personal knowledge base."""
+
+    return tool
