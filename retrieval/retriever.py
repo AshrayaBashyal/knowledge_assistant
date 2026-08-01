@@ -13,9 +13,11 @@ def retrieve_relevant_chunks(user, query: str, k: int = 4) -> list[LCDocument]:
     """
     started_at = time.monotonic()
     vector_store = get_vector_store(user.id)
+    # retriever = vector_store.as_retriever(search_kwargs={"k": k})    # use this to register results in LangSmith
 
     try:
         results = vector_store.similarity_search(query, k=k)
+        # results = retriever.invoke(query)    # use this to register results in LangSmith
         logger.info(
             "retrieval_query",
             extra={
@@ -39,4 +41,4 @@ def retrieve_relevant_chunks(user, query: str, k: int = 4) -> list[LCDocument]:
                 "duration_ms": round((time.monotonic() - started_at) * 1000, 2),
             },
         )
-        return []
+        return []    # raise
