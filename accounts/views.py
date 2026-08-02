@@ -2,11 +2,25 @@ from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import generics, permissions, status
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from accounts.serializers import LogoutSerializer, RegisterSerializer, UserSerializer
+
+
+@extend_schema(tags=["accounts"])
+class RateLimitedLoginView(TokenObtainPairView):
+    """
+    login an existing user
+ 
+    Thin subclass of SimpleJWT's TokenObtainPairView that adds rate
+    limiting (DEFAULT_THROTTLE_RATES["login"] in settings.py,) as brute-force protection, via DRF's built-in ScopedRateThrottle. Automatically keyed on IP here (not user id, unlike the chat endpoint) since ScopedRateThrottle falls back to IP whenever request.user isn't authenticated - which it never is at login time, since there's no valid token yet.
+    """
+    throttle_classes=[ScopedRateThrottle]
+    throttle_scope = "login"
 
 
 @extend_schema(tags=["accounts"])

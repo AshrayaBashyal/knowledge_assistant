@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import generics, permissions
 from rest_framework.request import Request
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from agents.service import build_agent
@@ -284,9 +285,14 @@ class ChatStreamView(APIView):
     If conversation_id is omitted, a new conversation is created on the
     fly and its id is sent back as the first SSE frame (event: meta) so
     the frontend can remember it for the next message. See _stream_chat_response for event shapes.
+
+    Rate limited via DRF's built-in ScopedRateThrottle (see DEFAULT_THROTTLE_RATES["chat"] in settings.py) - each request fires a real LLM API call, so an accidental frontend loop or credential compromise could rack up significant API usage without this limit.
+    ScopedRateThrottle automatically keys on the authenticated user's id (falling back to IP only if unauthenticated) with no custom key logic needed - check_throttles() already runs after authentication inside DRF's own request lifecycle (inside initial()).
     """
 
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "chat"
  
     @extend_schema(
         tags=["chat"],
