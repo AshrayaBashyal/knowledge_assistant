@@ -110,7 +110,29 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Only applied to views that explicitly opt in via throttle_classes + throttle_scope (ChatStreamView, accounts.views.LoginView) - not a DEFAULT_THROTTLE_CLASSES applying everywhere, since most endpoints here have no real cost/abuse concern that justifies it.
+    "DEFAULT_THROTTLE_RATES": {
+        "chat": os.getenv("RATELIMIT_CHAT_RATE", "30/m"),
+        "login": os.getenv("RATELIMIT_LOGIN_RATE", "10/m"),
+    },
 }
+
+
+# Cache (Redis)
+# Used by django-ratelimit (and optionally for future caching needs).
+# Using a distinct Redis DB (db=1) from Celery's broker (db=0) so the two concerns don't share a namespace and a cache flush can't accidentally drain the task queue.
+# DRF's throttling (see REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] above) reads from the "default" cache alias automatically - no extra setting needed beyond this.
+# Django automatically adds a ':1:' prefix to all its cache keys behind the scenes. This namespace isolation keeps your cache completely safe from interfering with Celery.
+# NOTE: Django's native RedisCache backend automatically detects the connection protocol.
+# If REDIS_CACHE_URL starts with 'rediss://', Django's underlying client (redis-py) automatically handles the SSL/TLS cryptographic handshake and certificate verification out of the box without requiring extra transport option dictionaries.
+REDIS_CACHE_URL = os.getenv("REDIS_CACHE_URL", "redis://localhost:6379/1")
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_CACHE_URL,
+    }
+}
+
  
 SPECTACULAR_SETTINGS = {
     "TITLE": "Knowledge Assistant API",
