@@ -110,6 +110,8 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
+
     # Only applied to views that explicitly opt in via throttle_classes + throttle_scope (ChatStreamView, accounts.views.LoginView) - not a DEFAULT_THROTTLE_CLASSES applying everywhere, since most endpoints here have no real cost/abuse concern that justifies it.
     "DEFAULT_THROTTLE_RATES": {
         "chat": os.getenv("RATELIMIT_CHAT_RATE", "30/m"),
