@@ -2,6 +2,8 @@ services:
   # Container 1: Your Django Web Server (Knowledge Assistant API)
   web:
     build: .
+    # Clean, custom name instead of server-web-1
+    container_name: knowledge_web_api
     ports:
       - "8000:8000"
     volumes:
@@ -9,10 +11,16 @@ services:
     # Ingests your entire .env file automatically
     env_file:
       - .env
+    # Automatically upgrades database tables before booting the server
+    command: >
+      sh -c "python manage.py migrate && 
+             python manage.py runserver 0.0.0.0:8000"
 
   # Container 2: Your Celery Background Worker (Handles Embeddings, RAG, & Agents)
   celery_worker:
     build: .
+    # Clean, custom name instead of server-celery_worker-1
+    container_name: knowledge_celery_worker
     command: celery -A config worker -l info --pool=solo
     volumes:
       - .:/app
