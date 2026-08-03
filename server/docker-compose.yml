@@ -1,0 +1,21 @@
+services:
+  # Container 1: Your Django Web Server (Knowledge Assistant API)
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    # Ingests your entire .env file automatically
+    env_file:
+      - .env
+
+  # Container 2: Your Celery Background Worker (Handles Embeddings, RAG, & Agents)
+  celery_worker:
+    build: .
+    command: celery -A config worker -l info --pool=solo
+    volumes:
+      - .:/app
+    # MANDATORY: Feeds Upstash URLs and LangSmith keys straight to Celery
+    env_file:
+      - .env
