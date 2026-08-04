@@ -1,1 +1,40 @@
+/* Instrument Serif for display/page titles, IBM Plex Sans for body UI text,
+   IBM Plex Mono for timestamps/ids/metadata (the "catalog card stamp" motif). */
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
+
+@theme {
+  /* Reset the entire default Tailwind theme so no default color, font,
+     or radius utility is reachable - everything below is project-specific. */
+  --color-*: initial;
+  --font-*: initial;
+  --radius-*: initial;
+
+  /* Color tokens - "The Reading Room" palette */
+  --color-paper: #F5F5F0;
+  --color-paper-dim: #EBE9E1;
+  --color-ink: #1B211D;
+  --color-ink-soft: #4B544E;
+  --color-ledger: #1F4D42;
+  --color-ledger-dim: #163A32;
+  --color-brass: #A9781E;
+  --color-crimson: #7A2333;
+  --color-mist: #D8D6CC;
+  --color-mist-dim: #C7C4B7;
+
+  /* Typography roles */
+  --font-display: 'Instrument Serif', serif;
+  --font-body: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Deliberately tiny radius scale - no default rounded-lg/rounded-xl left */
+  --radius-card: 0.25rem;
+  --radius-tab: 0.125rem;
+  --radius-tab-sm: 0.125rem;
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
