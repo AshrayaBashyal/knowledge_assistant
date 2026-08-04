@@ -49,7 +49,7 @@ export default function ChatPage() {
             className="flex-1 rounded-tab border border-mist bg-paper px-3 py-2 text-sm text-ink-soft placeholder:text-ink-soft focus:outline-none"
           />
           <Button disabled>
-            <PaperPlaneTilt size={16} />
+            <PaperPlaneTiltIcon size={16} />
             Send
           </Button>
         </div>
