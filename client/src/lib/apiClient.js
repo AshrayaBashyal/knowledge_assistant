@@ -26,7 +26,7 @@ async function parseErrorBody(response) {
  * normalizing errors into ApiError. Feature-specific endpoint calls
  * (login, documents, etc.) are built on top of this in later stages.
  */
-async function request(path, { method = 'GET', body, isFormData = false, skipAuth = false, retriedAfterRefresh = false } = {}) {
+async function request(path, { method = 'GET', body, isFormData = false, skipAuth = false, retriedAfterRefresh = false, credentials } = {}) {
   const headers = {}
   if (!isFormData) {
     headers['Content-Type'] = 'application/json'
@@ -41,12 +41,13 @@ async function request(path, { method = 'GET', body, isFormData = false, skipAut
     method,
     headers,
     body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
+    ...(credentials ? { credentials } : {}),
   })
 
   if (response.status === 401 && !skipAuth && !retriedAfterRefresh && unauthorizedHandler) {
     const refreshed = await unauthorizedHandler()
     if (refreshed) {
-      return request(path, { method, body, isFormData, skipAuth, retriedAfterRefresh: true })
+      return request(path, { method, body, isFormData, skipAuth, credentials, retriedAfterRefresh: true })
     }
   }
 
