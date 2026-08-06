@@ -7,10 +7,12 @@ import Spinner from '../components/ui/Spinner'
 import Alert from '../components/ui/Alert'
 import EmptyState from '../components/ui/EmptyState'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
+import IndexButton from '../components/ui/IndexButton'
 import { useResourceList } from '../hooks/useResourceList'
 import { useToast } from '../lib/ToastContext'
 import { getErrorMessage } from '../lib/errors'
 import { fetchDocuments, uploadDocument, deleteDocument, downloadDocument } from '../services/documentsService'
+import { triggerDocumentIndex, fetchDocumentIndexStatus } from '../services/retrievalService'
 import { ALLOWED_DOCUMENT_EXTENSIONS, MAX_DOCUMENT_UPLOAD_MB } from '../lib/env'
 
 const TYPE_ICON = {
@@ -160,6 +162,13 @@ export default function DocumentsPage() {
                     <p className="mt-1 font-mono text-[11px] text-ink-soft">
                       {doc.file_type} · {formatDate(doc.uploaded_at)}
                     </p>
+                    <div className="mt-2">
+                      <IndexButton
+                        onTrigger={() => triggerDocumentIndex(doc.id)}
+                        onPoll={() => fetchDocumentIndexStatus(doc.id)}
+                        initialStatus={null}
+                      />
+                    </div>
                   </div>
                   <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
