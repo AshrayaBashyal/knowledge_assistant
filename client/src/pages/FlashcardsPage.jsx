@@ -25,7 +25,9 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-// Polls a single pending set until it's no longer pending, then updates it in the list.
+// Polls a single set by ID until status is no longer 'pending'.
+// Rendered as a headless component so multiple sets can poll in parallel
+// without coordinating state in the parent.
 function PendingSetPoller({ setId, onDone, onError }) {
   const fetcher = useCallback(() => fetchFlashcardSet(setId), [setId])
   const stopWhen = useCallback((data) => data.status !== 'pending', [])
@@ -232,7 +234,15 @@ export default function FlashcardsPage() {
                     {set.status === 'pending' && (
                       <span className="flex items-center gap-1"><Spinner size={11} /> generating…</span>
                     )}
-                    {set.status === 'completed' && `${set.flashcards?.length ?? '?'} cards · ${formatDate(set.created_at)}`}
+                    {set.status === 'completed' && (
+                      // After polling completes, handlePollDone replaces the list-shape
+                      // object with the full detail response which includes flashcards[].
+                      // Until then (sets that were already done before page load) we
+                      // show the source title without a count.
+                      Array.isArray(set.flashcards)
+                        ? `${set.flashcards.length} cards · ${formatDate(set.created_at)}`
+                        : formatDate(set.created_at)
+                    )}
                     {set.status === 'failed' && (
                       <span className="flex items-center gap-1 text-crimson"><WarningCircle size={12} weight="fill" /> failed</span>
                     )}
