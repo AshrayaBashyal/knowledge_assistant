@@ -1,23 +1,30 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Button from '../ui/Button'
 import Alert from '../ui/Alert'
 import Spinner from '../ui/Spinner'
-import { useResourceList } from '../../hooks/useResourceList'
+import { getErrorMessage } from '../../lib/errors'
 import { fetchDocuments } from '../../services/documentsService'
 import { fetchNotes } from '../../services/notesService'
 import { generateFlashcards } from '../../services/flashcardsService'
-import { getErrorMessage } from '../../lib/errors'
 import { MAX_FLASHCARDS_PER_SET } from '../../lib/env'
 
+// Fetch documents and notes directly (not via useResourceList) so we have
+// full control over when fetches fire and avoid the referential-instability
+// problem that caused useResourceList's useEffect to loop on every render.
 export default function GenerateDialog({ onGenerated, onCancel }) {
-  const { items: documents } = useResourceList(useCallback(() => fetchDocuments(), []))
-  const { items: notes } = useResourceList(useCallback(() => fetchNotes(), []))
-
+  const [documents, setDocuments] = useState([])
+  const [notes, setNotes] = useState([])
   const [sourceType, setSourceType] = useState('document')
   const [sourceId, setSourceId] = useState('')
   const [count, setCount] = useState(10)
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+
+  // Fetch both lists once on mount - no dependency churn.
+  useEffect(() => {
+    fetchDocuments().then(setDocuments).catch(() => {})
+    fetchNotes().then(setNotes).catch(() => {})
+  }, [])
 
   // Reset the selected source when switching between documents and notes.
   useEffect(() => { setSourceId('') }, [sourceType])
@@ -88,7 +95,8 @@ export default function GenerateDialog({ onGenerated, onCancel }) {
 
           <label className="block">
             <span className="mb-1.5 block text-sm font-medium text-ink">
-              Number of cards <span className="font-normal text-ink-soft">(max {MAX_FLASHCARDS_PER_SET})</span>
+              Number of cards{' '}
+              <span className="font-normal text-ink-soft">(max {MAX_FLASHCARDS_PER_SET})</span>
             </span>
             <input
               type="number"
