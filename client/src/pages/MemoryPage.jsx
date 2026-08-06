@@ -108,7 +108,7 @@ export default function MemoryPage() {
         <div className="space-y-2">
           {memories.map((mem) => (
             <Card key={mem.id} tab="crimson" className="group flex items-start gap-4">
-              <p className="flex-1 text-sm text-ink">{mem.content}</p>
+              <p className="min-w-0 flex-1 break-words text-sm text-ink">{mem.content}</p>
               <div className="flex shrink-0 flex-col items-end gap-2">
                 <span className="font-mono text-[11px] text-ink-soft">{formatDate(mem.updated_at)}</span>
                 <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
