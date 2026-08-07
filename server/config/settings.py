@@ -77,7 +77,7 @@ import dj_database_url
 DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get('DATABASE_URL'),
-        conn_max_age=600,  # Keeps connections alive for 10 minutes to boost speed
+        conn_max_age=0,  # Keeps connections alive for 10 minutes to boost speed -changed to 0 due to high no. of conn_pool 
     )
 }
 
