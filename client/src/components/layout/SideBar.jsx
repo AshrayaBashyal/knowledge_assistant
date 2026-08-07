@@ -1,30 +1,18 @@
 import { useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
-  FileText,
-  NotePencil,
-  Brain,
-  MagnifyingGlass,
-  Cards,
-  ChatCircleDots,
-  CaretDown,
-  PencilSimpleLine,
+  FileText, NotePencil, Brain, MagnifyingGlass, Cards,
+  ChatCircleDots, CaretDown, PencilSimpleLine, Trash,
 } from '@phosphor-icons/react'
 import Logo from '../Logo'
+import { useConversations } from '../../lib/ConversationsContext'
 
-// Everything except Chat - a plain, non-expanding nav item each.
 const NAV_ITEMS = [
   { to: '/documents', label: 'Documents', icon: FileText },
   { to: '/notes', label: 'Notes', icon: NotePencil },
   { to: '/memory', label: 'Memory', icon: Brain },
   { to: '/search', label: 'Search', icon: MagnifyingGlass },
   { to: '/flashcards', label: 'Flashcards', icon: Cards },
-]
-
-// Placeholder data until later fetch GET /api/chat/conversations/ for real.
-const CONVERSATIONS = [
-  { id: 1, title: 'Budget report questions' },
-  { id: 2, title: 'New Conversation' },
 ]
 
 function NavTab({ isActive }) {
@@ -40,10 +28,25 @@ function NavTab({ isActive }) {
 
 export default function Sidebar() {
   const location = useLocation()
+  const navigate = useNavigate()
   const onChatRoute = location.pathname.startsWith('/chat')
-  // Auto-open the conversation list whenever we're already on a chat route,
-  // e.g. after following a link straight to /chat/5.
   const [chatOpen, setChatOpen] = useState(onChatRoute)
+  const { conversations, loading, removeConversation } = useConversations()
+
+  async function handleDeleteConversation(e, id) {
+    // Stop the click from also navigating into the conversation.
+    e.preventDefault()
+    e.stopPropagation()
+    try {
+      await removeConversation(id)
+      // If we just deleted the conversation we're currently viewing, go home.
+      if (location.pathname === `/chat/${id}`) {
+        navigate('/chat', { replace: true })
+      }
+    } catch {
+      // silently ignore - the page itself will handle errors for the active conversation
+    }
+  }
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-mist bg-paper-dim">
@@ -52,7 +55,6 @@ export default function Sidebar() {
         <span className="font-display italic text-2xl leading-none text-ink">Reading Room</span>
       </div>
 
-      {/* Permanent, always in the same place regardless of what's open below it. */}
       <div className="px-3 pb-3">
         <NavLink
           to="/chat"
@@ -84,13 +86,11 @@ export default function Sidebar() {
           </NavLink>
         ))}
 
-        {/* Chat sits last on purpose: its dropdown opens downward into empty
-            space, so Documents/Notes/Memory/Search/Flashcards above it never
-            shift position when the conversation list expands or collapses. */}
+        {/* Chat dropdown - sits last so it expands downward into empty space */}
         <div className="mt-auto pt-1">
           <button
             type="button"
-            onClick={() => setChatOpen((open) => !open)}
+            onClick={() => setChatOpen((o) => !o)}
             className={`group relative flex w-full items-center gap-3 rounded-tab py-2.5 pl-4 pr-3 text-sm font-body transition-colors ${
               onChatRoute ? 'text-ink' : 'text-ink-soft hover:text-ink'
             }`}
@@ -104,17 +104,30 @@ export default function Sidebar() {
 
           {chatOpen && (
             <div className="ml-4 mt-1 space-y-0.5 border-l border-mist pl-3">
-              {CONVERSATIONS.map((c) => (
+              {loading && (
+                <p className="py-1 pl-2 font-mono text-[11px] text-ink-soft">Loading…</p>
+              )}
+              {!loading && conversations.length === 0 && (
+                <p className="py-1 pl-2 font-mono text-[11px] text-ink-soft">No conversations yet</p>
+              )}
+              {conversations.map((c) => (
                 <NavLink
                   key={c.id}
                   to={`/chat/${c.id}`}
                   className={({ isActive }) =>
-                    `block truncate rounded-tab py-1.5 pl-2 pr-2 text-xs transition-colors ${
+                    `group/convo flex items-center justify-between rounded-tab py-1.5 pl-2 pr-1 text-xs transition-colors ${
                       isActive ? 'bg-paper text-ink font-medium' : 'text-ink-soft hover:text-ink'
                     }`
                   }
                 >
-                  {c.title}
+                  <span className="min-w-0 flex-1 truncate">{c.title || 'New Conversation'}</span>
+                  <button
+                    onClick={(e) => handleDeleteConversation(e, c.id)}
+                    className="ml-1 shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:text-crimson group-hover/convo:opacity-100"
+                    title="Delete"
+                  >
+                    <Trash size={12} />
+                  </button>
                 </NavLink>
               ))}
             </div>
