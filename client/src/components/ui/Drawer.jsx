@@ -25,19 +25,19 @@ export default function Drawer({ title, open, onClose, children }) {
         onClick={onClose}
         aria-hidden="true"
       />
-      {/* panel */}
+      {/* panel - full width on mobile, capped at md on larger screens */}
       <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-mist bg-paper shadow-xl">
-        <div className="flex items-center justify-between border-b border-mist px-6 py-4">
-          <h2 className="font-display italic text-2xl text-ink">{title}</h2>
+        <div className="flex min-w-0 items-center gap-3 border-b border-mist px-4 py-4 sm:px-6">
+          <h2 className="min-w-0 flex-1 truncate font-display italic text-2xl text-ink">{title}</h2>
           <button
             onClick={onClose}
-            className="rounded-tab p-1.5 text-ink-soft hover:text-ink"
+            className="shrink-0 rounded-tab p-2 text-ink-soft hover:text-ink touch:opacity-100"
             aria-label="Close"
           >
             <X size={20} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
           {children}
         </div>
       </div>
