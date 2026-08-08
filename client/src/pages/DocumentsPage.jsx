@@ -7,6 +7,7 @@ import Spinner from '../components/ui/Spinner'
 import Alert from '../components/ui/Alert'
 import EmptyState from '../components/ui/EmptyState'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
+import SkeletonCards from '../components/ui/SkeletonCards'
 import IndexButton from '../components/ui/IndexButton'
 import { useResourceList } from '../hooks/useResourceList'
 import { useToast } from '../lib/ToastContext'
@@ -130,11 +131,7 @@ export default function DocumentsPage() {
         </Alert>
       )}
 
-      {loading && (
-        <div className="flex justify-center py-16">
-          <Spinner size={28} className="text-ink-soft" />
-        </div>
-      )}
+      {loading && <SkeletonCards count={3} />}
 
       {!loading && !error && docs.length === 0 && (
         <EmptyState
