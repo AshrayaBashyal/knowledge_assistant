@@ -1,11 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { fetchConversations, deleteConversation, renameConversation } from '../services/chatService'
+import { useAuth } from './AuthContext'
 
 const ConversationsContext = createContext(null)
 
 export function ConversationsProvider({ children }) {
+  const { status } = useAuth()
   const [conversations, setConversations] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -19,7 +21,12 @@ export function ConversationsProvider({ children }) {
     }
   }, [])
 
-  useEffect(() => { reload() }, [reload])
+  // Only fetch once the user is confirmed authenticated — not during
+  // session restore, and not when logged out.
+  useEffect(() => {
+    if (status === 'authenticated') reload()
+    if (status === 'unauthenticated') setConversations([])
+  }, [status, reload])
 
   const addConversation = useCallback((convo) => {
     setConversations((prev) => [convo, ...prev])
