@@ -138,7 +138,7 @@ export default function Sidebar({ onNavClick }) {
       </nav>
 
       <div className="border-t border-mist px-5 py-4 font-mono text-[11px] text-ink-soft">
-        v0.1 — stage 10
+        v0.1
       </div>
     </aside>
   )
