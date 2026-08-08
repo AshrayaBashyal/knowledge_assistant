@@ -90,7 +90,7 @@ function CardEditor({ card, onSave, onDelete }) {
   return (
     <div className="group relative">
       <FlipCard card={card} />
-      <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100">
         <button onClick={() => setEditing(true)}
           className="rounded-tab bg-paper p-1.5 text-ink-soft shadow hover:text-ink" title="Edit">
           <PencilSimple size={14} />
@@ -248,7 +248,7 @@ export default function FlashcardsPage() {
                     )}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100">
                   {set.status === 'completed' && (
                     <button onClick={() => openStudy(set)}
                       className="rounded-tab p-1.5 text-ink-soft hover:text-ink" title="Study">

@@ -118,7 +118,7 @@ export default function NotesPage() {
                     />
                   </div>
                 </div>
-                <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100">
                   <button
                     onClick={() => openEdit(note)}
                     className="rounded-tab p-1.5 text-ink-soft hover:text-ink"

@@ -38,3 +38,8 @@ body {
   color: var(--color-ink);
   font-family: var(--font-body);
 }
+
+/* touch: variant — applies styles when the primary input is a touchscreen
+   (i.e. no fine pointer / no hover). Used to make hover-only action buttons
+   permanently visible on mobile where hover never fires. */
+@custom-variant touch (@media (hover: none) and (pointer: coarse));

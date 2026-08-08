@@ -125,7 +125,7 @@ export default function Sidebar({ onNavClick }) {
                   <span className="min-w-0 flex-1 truncate">{c.title || 'New Conversation'}</span>
                   <button
                     onClick={(e) => handleDeleteConversation(e, c.id)}
-                    className="ml-1 shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:text-crimson group-hover/convo:opacity-100"
+                    className="ml-1 shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:text-crimson group-hover/convo:opacity-100 touch:opacity-100"
                     title="Delete"
                   >
                     <Trash size={12} />
@@ -138,7 +138,7 @@ export default function Sidebar({ onNavClick }) {
       </nav>
 
       <div className="border-t border-mist px-5 py-4 font-mono text-[11px] text-ink-soft">
-        v0.1
+        v0.1 — stage 10
       </div>
     </aside>
   )

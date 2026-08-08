@@ -111,7 +111,7 @@ export default function MemoryPage() {
               <p className="min-w-0 flex-1 break-words text-sm text-ink">{mem.content}</p>
               <div className="flex shrink-0 flex-col items-end gap-2">
                 <span className="font-mono text-[11px] text-ink-soft">{formatDate(mem.updated_at)}</span>
-                <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100">
                   <button
                     onClick={() => openEdit(mem)}
                     className="rounded-tab p-1.5 text-ink-soft hover:text-ink"
