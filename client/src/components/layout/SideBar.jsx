@@ -26,7 +26,7 @@ function NavTab({ isActive }) {
   )
 }
 
-export default function Sidebar() {
+export default function Sidebar({ onNavClick }) {
   const location = useLocation()
   const navigate = useNavigate()
   const onChatRoute = location.pathname.startsWith('/chat')
@@ -58,6 +58,7 @@ export default function Sidebar() {
       <div className="px-3 pb-3">
         <NavLink
           to="/chat"
+          onClick={onNavClick}
           className="flex items-center justify-center gap-2 rounded-tab bg-ledger py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ledger-dim"
         >
           <PencilSimpleLine size={17} />
@@ -70,6 +71,7 @@ export default function Sidebar() {
           <NavLink
             key={to}
             to={to}
+            onClick={onNavClick}
             className={({ isActive }) =>
               `group relative flex items-center gap-3 rounded-tab py-2.5 pl-4 pr-3 text-sm font-body transition-colors ${
                 isActive ? 'text-ink' : 'text-ink-soft hover:text-ink'
@@ -136,7 +138,7 @@ export default function Sidebar() {
       </nav>
 
       <div className="border-t border-mist px-5 py-4 font-mono text-[11px] text-ink-soft">
-        v0.1
+        v0.1 — stage 10
       </div>
     </aside>
   )
