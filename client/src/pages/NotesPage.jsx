@@ -9,6 +9,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog'
 import Drawer from '../components/ui/Drawer'
 import IndexButton from '../components/ui/IndexButton'
 import NoteForm from '../components/notes/NoteForm'
+import SkeletonCards from '../components/ui/SkeletonCards'
 import { useResourceList } from '../hooks/useResourceList'
 import { useToast } from '../lib/ToastContext'
 import { getErrorMessage } from '../lib/errors'
@@ -85,11 +86,7 @@ export default function NotesPage() {
         </Alert>
       )}
 
-      {loading && (
-        <div className="flex justify-center py-16">
-          <Spinner size={28} className="text-ink-soft" />
-        </div>
-      )}
+      {loading && <SkeletonCards count={4} />}
 
       {!loading && !error && notes.length === 0 && (
         <EmptyState
