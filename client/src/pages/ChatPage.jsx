@@ -80,6 +80,16 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingText])
 
+  // Re-focus the input after streaming finishes so the user can type immediately.
+  useEffect(() => {
+    if (!streaming) inputRef.current?.focus()
+  }, [streaming])
+
+  // Focus input after history loads too.
+  useEffect(() => {
+    if (!loadingHistory) inputRef.current?.focus()
+  }, [loadingHistory])
+
   async function handleSend() {
     const text = input.trim()
     if (!text || streaming) return
@@ -92,6 +102,10 @@ export default function ChatPage() {
     }
     setMessages((prev) => [...prev, userMessage])
     setInput('')
+    // Reset the auto-grown textarea back to one row.
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto'
+    }
 
     const isNew = !conversationId
     await send({ message: text, conversationId: conversationId ? Number(conversationId) : undefined })
@@ -148,7 +162,12 @@ export default function ChatPage() {
       )}
 
       {/* Message thread */}
-      <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
+      <div
+        className="flex-1 space-y-5 overflow-y-auto px-6 py-6"
+        aria-label="Conversation"
+        aria-live="polite"
+        aria-atomic="false"
+      >
         {loadingHistory && (
           <div className="flex justify-center py-8">
             <Spinner size={24} className="text-ink-soft" />
