@@ -12,6 +12,7 @@ export default function Logo({ size = 28, className = '' }) {
       className={className}
       aria-hidden="true"
     >
+      <title>Reading Room logo</title>
       {/* back card, rotated, with a guide tab poking out the top */}
       <g transform="rotate(-8 16 16)">
         <rect x="9" y="5" width="16" height="21" rx="1" fill="var(--color-paper-dim)" stroke="var(--color-mist-dim)" strokeWidth="1" />
