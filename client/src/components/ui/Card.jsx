@@ -11,7 +11,7 @@ const TAB_COLORS = {
 export default function Card({ tab = 'ledger', children, className = '', as: Tag = 'div', ...rest }) {
   return (
     <Tag
-      className={`relative overflow-hidden rounded-card border border-mist bg-paper pl-5 pr-4 py-4 ${className}`}
+      className={`relative overflow-hidden rounded-card border border-mist bg-paper pl-5 pr-4 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ledger focus-visible:ring-offset-1 ${className}`}
       {...rest}
     >
       <span
