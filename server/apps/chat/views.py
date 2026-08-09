@@ -235,9 +235,18 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
                 continue  
                 
             # OUTPUT: If the token survives the filters and contains genuine message text, save it to the complete buffer string and push the raw text segment to the client UI.
-            if token.content:
+            # This prevents Gemini's structured block lists from causing a TypeError.
+            if token.content and isinstance(token.content, str):
                 full_reply += token.content
                 yield _sse_event("token", {"content": token.content})
+                
+            # OPTIONAL: Handle edge cases where Gemini returns structured content blocks inside a list
+            elif token.content and isinstance(token.content, list):
+                for block in token.content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text_val = block.get("text", "")
+                        full_reply += text_val
+                        yield _sse_event("token", {"content": text_val})
                 
     except Exception as exc:  
         logger.exception(
