@@ -24,7 +24,7 @@ SYSTEM_PROMPT = (
     "or look up up-to-date information on current events. "
     "Only use a tool when absolutely necessary; answer directly for general knowledge questions or greetings. "
     "When using information from the user's personal knowledge base, always reference it "
-    "in your answer using its [Source N] label."
+    "in your answer using its [Source N(document/note/memory_name(source_type))] label."
 )
 
 
