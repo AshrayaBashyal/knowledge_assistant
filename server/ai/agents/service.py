@@ -24,7 +24,8 @@ SYSTEM_PROMPT = (
     "or look up up-to-date information on current events. "
     "Only use a tool when absolutely necessary; answer directly for general knowledge questions or greetings. "
     "When using information from the user's personal knowledge base, always reference it "
-    "in your answer using its [Source N(document/note/memory_name(source_type))] label."
+    "in your answer using its source label format, including the index and the exact document title provided. "
+    "For example, write: [Source 1: My_Document_Name.pdf (document)] or [Source 2: Lecture_Notes (note)]."
 )
 
 
