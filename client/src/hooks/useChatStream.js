@@ -38,6 +38,7 @@ export function useChatStream({ onMetaReceived, onDone }) {
 
       let resolvedConversationId = conversationId
       let fullText = ''
+      let resolvedSources = null  // track locally so the done handler isn't reading stale closure state
 
       for await (const frame of readSSEStream(response)) {
         if (controller.signal.aborted) break
@@ -54,7 +55,8 @@ export function useChatStream({ onMetaReceived, onDone }) {
             break
 
           case 'sources':
-            setSources(frame.data.sources)
+            resolvedSources = frame.data.sources
+            setSources(resolvedSources)  // also update state so ToolCallIndicator can show them mid-stream
             break
 
           case 'token':
@@ -64,7 +66,7 @@ export function useChatStream({ onMetaReceived, onDone }) {
 
           case 'done':
             setStreaming(false)
-            onDone?.({ text: fullText, conversationId: resolvedConversationId, sources })
+            onDone?.({ text: fullText, conversationId: resolvedConversationId, sources: resolvedSources })
             break
 
           case 'error':
