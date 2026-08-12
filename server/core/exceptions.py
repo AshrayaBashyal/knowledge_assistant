@@ -18,7 +18,7 @@ def custom_exception_handler(exc, context):
  
     2. Log every unhandled exception (5xx) with structured context
        (view name, request method/path), so production errors are
-       findable in the logs alongside the Milestone 12 structured
+       findable in the logs alongside the structured
        logging.
     """
 

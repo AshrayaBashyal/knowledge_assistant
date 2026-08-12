@@ -27,8 +27,7 @@ def retrieve_relevant_chunks(user, query: str, k: int = 4) -> list[LCDocument]:
 
     Trade-off worth naming: the previous version called
     vector_store.as_retriever().invoke(query), which is a LangChain
-    Runnable and therefore automatically traced by LangSmith (Milestone
-    13) - VectorStoreRetriever IS a Runnable subclass, but a plain
+    Runnable and therefore automatically traced by LangSmith - VectorStoreRetriever IS a Runnable subclass, but a plain
     Python function computing similarity by hand is not, so it would be
     invisible in traces without help. The @traceable decorator above
     (from the langsmith package directly, not something LangChain wraps

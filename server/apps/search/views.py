@@ -33,9 +33,9 @@ class WorkspaceSearchView(APIView):
     This is deliberately not semantic/embedding-based search: Workspace
     Search is a keyword lookup tool for the user to find their own
     content quickly, not a retrieval-quality concern - that's what
-    search_my_knowledge (the agent tool, Milestone 6) is for. Embedding
-    every chat message just to support this would mean an embedding call
-    on every single turn, forever, for a feature used occasionally.
+    search_my_knowledge is for. Embedding every chat message just to
+    support this would mean an embedding call on every single turn,
+    forever, for a feature used occasionally.
 
     Two caveats worth naming plainly:
     - Each source's BM25 corpus (documents, notes, messages) is scored
