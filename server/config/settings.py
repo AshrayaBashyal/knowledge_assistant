@@ -128,7 +128,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # File Storage Configuration
 staticfiles_backend = (
-    "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    "whitenoise.storage.CompressedStaticFilesStorage"
     if HAS_WHITENOISE
     else "django.contrib.staticfiles.storage.StaticFilesStorage"
 )
