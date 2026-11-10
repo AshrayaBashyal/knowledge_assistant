@@ -8,6 +8,7 @@ import NotesPage from '../pages/NotesPage'
 import MemoryPage from '../pages/MemoryPage'
 import SearchPage from '../pages/SearchPage'
 import FlashcardsPage from '../pages/FlashcardsPage'
+import AdminDashboardPage from '../pages/AdminDashboardPage'
 import LoginPage from '../pages/LoginPage'
 import RegisterPage from '../pages/RegisterPage'
 
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
           { path: 'flashcards', element: <FlashcardsPage />, handle: { title: 'Flashcards' } },
           { path: 'chat', element: <ChatPage />, handle: { title: 'Chat' } },
           { path: 'chat/:conversationId', element: <ChatPage />, handle: { title: 'Chat' } },
+          { path: 'admin', element: <AdminDashboardPage />, handle: { title: 'Admin & Metrics' } },
         ],
       },
     ],

@@ -9,4 +9,5 @@ urlpatterns = [
     path("notes/", include("apps.notes.urls")),
     path("retrieval/", include("apps.retrieval.urls")),
     path("search/", include("apps.search.urls")),
+    path("", include("apps.analytics.urls")),
 ]

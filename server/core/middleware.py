@@ -11,14 +11,7 @@ class RequestLoggingMiddleware:
     so it covers every request Django handles, including the admin and
     Swagger UI, not just DRF API views.
 
-    warning: for streaming responses (chat's SSEendpoint),
-    `duration_ms` here only measures how long it took to
-    *build* the StreamingHttpResponse object, not how long the actual
-    token stream took to send - Django doesn't iterate a streaming
-    response's generator until after middleware has already returned.
-    Chat-specific latency is measured separately, inside
-    chat/views.py's _stream_chat_response, closer to where the real
-    work happens.
+    Also records API metrics to ApiMetric for the Admin Dashboard.
     """
 
     def __init__(self, get_response):
@@ -42,4 +35,19 @@ class RequestLoggingMiddleware:
                 "user_id": user_id,
             },
         )
+
+        # Record API metric for admin dashboard (skip log viewer polling to avoid recursive noise)
+        if request.path.startswith("/api/") and not request.path.startswith("/api/admin/logs"):
+            try:
+                from apps.analytics.models import ApiMetric
+                ApiMetric.objects.create(
+                    path=request.path,
+                    method=request.method,
+                    status_code=response.status_code,
+                    duration_ms=duration_ms,
+                    user=user if (user and user.is_authenticated) else None,
+                )
+            except Exception:
+                pass  # Avoid crashing request if DB is migrating
+
         return response

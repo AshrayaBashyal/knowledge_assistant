@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: reading-room-api
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install -r server/requirements.txt && python server/manage.py collectstatic --noinput"
+    startCommand: "bash start.sh"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: "*"
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_INDEX_NAME
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://your-frontend.vercel.app,http://localhost:5173"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://*.onrender.com,https://*.vercel.app"
+      - key: CELERY_TASK_ALWAYS_EAGER
+        value: "True"
+      - key: CELERY_REDIS_URL
+        sync: false
+      - key: REDIS_CACHE_URL
+        sync: false

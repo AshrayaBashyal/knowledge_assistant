@@ -15,7 +15,7 @@ export function setUnauthorizedHandler(handler) {
 async function parseErrorBody(response) {
   try {
     const body = await response.json()
-    return body?.detail ?? 'Request failed'
+    return body?.detail ?? body?.error ?? (typeof body === 'string' ? body : 'Request failed')
   } catch {
     return 'Request failed'
   }

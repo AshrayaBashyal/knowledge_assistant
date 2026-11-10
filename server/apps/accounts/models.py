@@ -50,8 +50,43 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     objects = UserManager()
 
-    USERNAME_FIELD = "email" 
-    REQUIRED_FIELDS = []  
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = []
 
     def __str__(self) -> str:
         return self.email
+
+
+class UserAiSetting(models.Model):
+    """
+    Stores user-provided API keys (BYOK) and model preferences.
+    Keys are sanitized on save and masked on read.
+    """
+    class Provider(models.TextChoices):
+        DEFAULT = "default", "Default (System)"
+        GEMINI = "gemini", "Google Gemini"
+        GROQ = "groq", "Groq"
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="ai_settings")
+    provider = models.CharField(max_length=20, choices=Provider.choices, default=Provider.DEFAULT)
+    gemini_api_key = models.CharField(max_length=255, blank=True, default="")
+    groq_api_key = models.CharField(max_length=255, blank=True, default="")
+    preferred_model = models.CharField(max_length=100, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"{self.user.email} - {self.provider}"
+
+    def get_masked_gemini_key(self) -> str:
+        if not self.gemini_api_key:
+            return ""
+        if len(self.gemini_api_key) <= 8:
+            return "********"
+        return f"{self.gemini_api_key[:6]}...{self.gemini_api_key[-4:]}"
+
+    def get_masked_groq_key(self) -> str:
+        if not self.groq_api_key:
+            return ""
+        if len(self.groq_api_key) <= 8:
+            return "********"
+        return f"{self.groq_api_key[:6]}...{self.groq_api_key[-4:]}"

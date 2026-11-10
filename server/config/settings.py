@@ -1,21 +1,35 @@
 import os
-import ssl
 from pathlib import Path
-from dotenv import load_dotenv
 from datetime import timedelta
-
+from dotenv import load_dotenv
+import dj_database_url
 
 load_dotenv()
 
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("SECRET_KEY", "insecure-dev-key")
-DEBUG = os.getenv("DEBUG", "True") == "True"
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+SECRET_KEY = os.getenv("SECRET_KEY", "insecure-dev-key-change-in-production")
+DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1")
+
+# Allow Render / Vercel / local domains
+allowed_hosts_raw = os.getenv("ALLOWED_HOSTS", "*")
+ALLOWED_HOSTS = [h.strip() for h in allowed_hosts_raw.split(",") if h.strip()]
+
+# Safe check for optional production packages
+try:
+    import whitenoise
+    HAS_WHITENOISE = True
+except ImportError:
+    HAS_WHITENOISE = False
+
+try:
+    import cloudinary
+    import cloudinary_storage
+    HAS_CLOUDINARY = True
+except ImportError:
+    HAS_CLOUDINARY = False
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -37,20 +51,33 @@ INSTALLED_APPS = [
     "apps.flashcards",
     "apps.memory",
     "apps.search",
+    "apps.analytics",
 ]
+
+if HAS_WHITENOISE:
+    idx = INSTALLED_APPS.index('django.contrib.staticfiles')
+    INSTALLED_APPS.insert(idx, 'whitenoise.runserver_nostatic')
+
+if HAS_CLOUDINARY and os.getenv("CLOUDINARY_CLOUD_NAME"):
+    INSTALLED_APPS.insert(0, "cloudinary_storage")
+    INSTALLED_APPS.append("cloudinary")
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+]
+if HAS_WHITENOISE:
+    MIDDLEWARE.append('whitenoise.middleware.WhiteNoiseMiddleware')
+
+MIDDLEWARE.extend([
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware', 
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.RequestLoggingMiddleware',
-
-]
+])
 
 ROOT_URLCONF = 'config.urls'
 
@@ -72,34 +99,70 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = "config.asgi.application"
 
-import dj_database_url
-
+# Database: Neon PostgreSQL in production, SQLite fallback in local dev
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL'),
-        conn_max_age=0,  # Keeps connections alive for 10 minutes to boost speed -changed to 0 due to high no. of conn_pool 
+        default=os.environ.get('DATABASE_URL', f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
+        conn_max_age=600 if os.environ.get('DATABASE_URL') else 0,
+        conn_health_checks=True if os.environ.get('DATABASE_URL') else False,
     )
 }
 
 AUTH_USER_MODEL = "accounts.User"
 
 AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',},
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
-
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
+# Static files (CSS, JavaScript, Images)
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
-STATIC_URL = 'static/'
+# File Storage Configuration
+staticfiles_backend = (
+    "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    if HAS_WHITENOISE
+    else "django.contrib.staticfiles.storage.StaticFilesStorage"
+)
+
+CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
+if HAS_CLOUDINARY and CLOUDINARY_CLOUD_NAME:
+    CLOUDINARY_STORAGE = {
+        "CLOUD_NAME": CLOUDINARY_CLOUD_NAME,
+        "API_KEY": os.getenv("CLOUDINARY_API_KEY"),
+        "API_SECRET": os.getenv("CLOUDINARY_API_SECRET"),
+    }
+    STORAGES = {
+        "default": {
+            "BACKEND": "cloudinary_storage.storage.RawMediaCloudinaryStorage"
+        },
+        "staticfiles": {
+            "BACKEND": staticfiles_backend
+        },
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": staticfiles_backend
+        },
+    }
+
+MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = "/media/"
+DOCUMENT_MAX_UPLOAD_SIZE_MB = int(os.getenv("DOCUMENT_MAX_UPLOAD_SIZE_MB", "60"))
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -110,129 +173,107 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
-    # Only applied to views that explicitly opt in via throttle_classes + throttle_scope (ChatStreamView, accounts.views.LoginView) - not a DEFAULT_THROTTLE_CLASSES applying everywhere, since most endpoints here have no real cost/abuse concern that justifies it.
     "DEFAULT_THROTTLE_RATES": {
         "chat": os.getenv("RATELIMIT_CHAT_RATE", "30/m"),
         "login": os.getenv("RATELIMIT_LOGIN_RATE", "10/m"),
     },
 }
 
-
-# Cache (Redis)
-# Used by django-ratelimit (and optionally for future caching needs).
-# Using a distinct Redis DB (db=1) from Celery's broker (db=0) so the two concerns don't share a namespace and a cache flush can't accidentally drain the task queue.
-# DRF's throttling (see REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] above) reads from the "default" cache alias automatically - no extra setting needed beyond this.
-# Django automatically adds a ':1:' prefix to all its cache keys behind the scenes. This namespace isolation keeps your cache completely safe from interfering with Celery.
-# NOTE: Django's native RedisCache backend automatically detects the connection protocol.
-# If REDIS_CACHE_URL starts with 'rediss://', Django's underlying client (redis-py) automatically handles the SSL/TLS cryptographic handshake and certificate verification out of the box without requiring extra transport option dictionaries.
-REDIS_CACHE_URL = os.getenv("REDIS_CACHE_URL", "redis://localhost:6379/1")
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": REDIS_CACHE_URL,
+# Cache: Redis if configured, else in-memory LocMemCache
+REDIS_CACHE_URL = os.getenv("REDIS_CACHE_URL", "")
+if REDIS_CACHE_URL and REDIS_CACHE_URL.lower() != "none":
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_CACHE_URL,
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        }
+    }
 
- 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Knowledge Assistant API",
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
-
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=100),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=120),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": True,
 }
- 
-CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:8501").split(",")
 
+# CORS & CSRF
+cors_raw = os.getenv("CORS_ALLOWED_ORIGINS", "")
+if cors_raw:
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_raw.split(",") if origin.strip()]
+else:
+    CORS_ALLOW_ALL_ORIGINS = True
 
+CORS_ALLOW_CREDENTIALS = True
 
-#  Chat 
-# Caps how many past messages are replayed to the model on each turn, so prompt size (latency + token cost) stays bounded as a conversation grows.
+csrf_raw = os.getenv("CSRF_TRUSTED_ORIGINS", "")
+if csrf_raw:
+    CSRF_TRUSTED_ORIGINS = [o.strip() for o in csrf_raw.split(",") if o.strip()]
+else:
+    CSRF_TRUSTED_ORIGINS = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "https://*.onrender.com",
+        "https://*.vercel.app",
+    ]
+
+# Chat
 CHAT_HISTORY_MAX_MESSAGES = int(os.getenv("CHAT_HISTORY_MAX_MESSAGES", "20"))
 
-# Documents:
-# Local disk for now (Django's default FileSystemStorage). Swapping to
-# S3/MinIO later only means changing DEFAULT_FILE_STORAGE + credentials -
-# nothing in documents/models.py or views.py needs to change, since they
-# only ever call `file.open()` / `file.delete()`, never touch paths directly.
-
-# Absolute path to the directory that will hold user-uploaded files
-MEDIA_ROOT = BASE_DIR / "media"
-# URL that handles the media served from MEDIA_ROOT
-MEDIA_URL = "/media/"
-# Caps the size of the files allowed to be uploaded
-DOCUMENT_MAX_UPLOAD_SIZE_MB = int(os.getenv("DOCUMENT_MAX_UPLOAD_SIZE_MB", "60"))
-
-
-# Retrieval (RAG) 
+# Retrieval (RAG) & Vector Database
 CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR") or str(BASE_DIR / "chroma_data")
 RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "4"))
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "gemini")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "")
 
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 1000))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 200))
 
-# Tavily search Agent tool
-# Web search is optional - only included in the agent's tool list if a key is actually configured
+# Tavily search tool (optional)
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 WEB_SEARCH_MAX_RESULTS = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "3"))
 
-# workspace-search
-RESULTS_PER_SOURCE = int(os.getenv("RESULTS_PER_SOURCE","10"))
+# Workspace search
+RESULTS_PER_SOURCE = int(os.getenv("RESULTS_PER_SOURCE", "10"))
 
+# Celery & Background Tasks
+CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "True").lower() in ("true", "1")
+CELERY_TASK_EAGER_PROPAGATES = True
 
-# Celery & Redis setup
-# Redis is used purely as the message broker (+ result backend for debugging) for now - task status that the app actually queries lives in our own models (ContentIndex, FlashcardSet), not Celery's result backend.
-# Caching uses of Redis later
 CELERY_REDIS_URL = os.getenv("CELERY_REDIS_URL", "redis://localhost:6379/0")
 CELERY_BROKER_URL = CELERY_REDIS_URL
 CELERY_RESULT_BACKEND = CELERY_REDIS_URL
 
-# Only enforce strict SSL connection details if using a remote secured Redis instance (rediss://)
 if CELERY_REDIS_URL.startswith("rediss://"):
-    # Clean injection directly into the URL parameters
-    CELERY_BROKER_URL = f"{CELERY_REDIS_URL}?ssl_cert_reqs=CERT_REQUIRED"
-    CELERY_RESULT_BACKEND = f"{CELERY_REDIS_URL}?ssl_cert_reqs=CERT_REQUIRED"
-
-else:
-    CELERY_BROKER_TRANSPORT_OPTIONS = {}
-    CELERY_REDIS_BACKEND_TRANSPORT_OPTIONS = {}
+    ssl_reqs = os.getenv("REDIS_SSL_CERT_REQS", "CERT_NONE")
+    CELERY_BROKER_URL = f"{CELERY_REDIS_URL}?ssl_cert_reqs={ssl_reqs}"
+    CELERY_RESULT_BACKEND = f"{CELERY_REDIS_URL}?ssl_cert_reqs={ssl_reqs}"
 
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 
-
-# LangSmith
-# Unlike GROQ_API_KEY or TAVILY_API_KEY, LangSmith settings are NOT read
-# through Django settings. LangChain reads LANGSMITH_TRACING,
-# LANGSMITH_API_KEY, and LANGSMITH_PROJECT directly from environment
-# variables when it is imported.
-#
-# Since load_dotenv() has already loaded the .env file into os.environ
-# before any LangChain code runs, tracing is enabled automatically for
-# model calls, agent tool calls, and retrieval calls. No extra Django
-# settings or code are required.
-#
-# Adding LANGSMITH_API_KEY to Django settings would have no effect because
-# nothing reads it. See .env.example for the required environment
-# variables.
-
-
 # Logging
-# JSON to stdout (captured by whatever process manager/Docker/systemd runs this in production) plus a rotating file, so logs survive a container restart during local development. No custom dashboard here on purpose - LangSmith will covers LLM-specific tracing in far more depth than a hand-built UI would, and Django admin already lets you inspect ContentIndex/FlashcardSet/etc. status directly.
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
- 
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -247,8 +288,8 @@ LOGGING = {
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
             "filename": str(LOG_DIR / "app.log"),
-            "maxBytes": 10 * 1024 * 1024,  # 10MB  - if bigger new log-file created
-            "backupCount": 5, #When a sixth rotation happens-oldest deleted.
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
             "formatter": "json",
         },
     },
@@ -257,27 +298,6 @@ LOGGING = {
         "level": os.getenv("LOG_LEVEL", "INFO"),
     },
     "loggers": {
-        # Django's own request logger would otherwise double-log every request in its own (non-JSON) format alongside our middleware.
         "django.server": {"handlers": ["console", "file"], "level": "WARNING", "propagate": False},
-        # "core.request": {"level": "INFO",},
-        # "tools": {"level": "INFO",},
-        # "chat": {"level": "INFO",},
     },
 }
-
-# Logging hierarchy (simplified)
-#
-# root
-# ├── django
-# │   ├── django.server
-# │   ├── django.request
-# │   ├── django.db.backends
-# │   ├── django.security
-# │   └── django.template
-# │
-# ├── core.request
-# ├── chat
-# ├── tools
-# └── embedding
-#
-# Loggers inherit settings from their parent unless explicitly configured.

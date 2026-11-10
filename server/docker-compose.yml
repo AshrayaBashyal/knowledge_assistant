@@ -3,7 +3,7 @@ services:
   web:
     build: .
     # Clean, custom name instead of server-web-1
-    container_name: knowledge_web_api
+    container_name: reading_room_web_api
     ports:
       - "8000:8000"
     volumes:
@@ -20,7 +20,7 @@ services:
   celery_worker:
     build: .
     # Clean, custom name instead of server-celery_worker-1
-    container_name: knowledge_celery_worker
+    container_name: reading_room_celery_worker
     command: celery -A config worker -l info --pool=solo
     volumes:
       - .:/app

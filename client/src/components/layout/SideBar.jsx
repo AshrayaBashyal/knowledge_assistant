@@ -1,11 +1,22 @@
 import { useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
-  FileText, NotePencil, Brain, MagnifyingGlass, Cards,
-  ChatCircleDots, CaretDown, PencilSimpleLine, Trash,
+  FileText,
+  NotePencil,
+  Brain,
+  MagnifyingGlass,
+  Cards,
+  ChatCircleDots,
+  CaretDown,
+  PencilSimpleLine,
+  Trash,
+  ShieldCheck,
+  Cpu,
 } from '@phosphor-icons/react'
 import Logo from '../Logo'
 import { useConversations } from '../../lib/ConversationsContext'
+import { useAuth } from '../../lib/AuthContext'
+import AiSettingsModal from '../AiSettingsModal'
 
 const NAV_ITEMS = [
   { to: '/documents', label: 'Documents', icon: FileText },
@@ -29,117 +40,156 @@ function NavTab({ isActive }) {
 export default function Sidebar({ onNavClick }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const onChatRoute = location.pathname.startsWith('/chat')
   const [chatOpen, setChatOpen] = useState(onChatRoute)
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false)
   const { conversations, loading, removeConversation } = useConversations()
 
   async function handleDeleteConversation(e, id) {
-    // Stop the click from also navigating into the conversation.
     e.preventDefault()
     e.stopPropagation()
     try {
       await removeConversation(id)
-      // If we just deleted the conversation we're currently viewing, go home.
       if (location.pathname === `/chat/${id}`) {
         navigate('/chat', { replace: true })
       }
     } catch {
-      // silently ignore - the page itself will handle errors for the active conversation
+      // silently ignore
     }
   }
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-mist bg-paper-dim">
-      <div className="flex items-center gap-2.5 px-5 py-6">
-        <Logo size={26} />
-        <span className="font-display italic text-2xl leading-none text-ink">Reading Room</span>
-      </div>
+    <>
+      <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-mist bg-paper-dim">
+        <div className="flex items-center gap-2.5 px-5 py-6">
+          <Logo size={26} />
+          <span className="font-display italic text-2xl leading-none text-ink">Reading Room</span>
+        </div>
 
-      <div className="px-3 pb-3">
-        <NavLink
-          to="/chat"
-          onClick={onNavClick}
-          className="flex items-center justify-center gap-2 rounded-tab bg-ledger py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ledger-dim"
-        >
-          <PencilSimpleLine size={17} />
-          New chat
-        </NavLink>
-      </div>
-
-      <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3">
-        {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+        <div className="px-3 pb-3">
           <NavLink
-            key={to}
-            to={to}
+            to="/chat"
             onClick={onNavClick}
-            className={({ isActive }) =>
-              `group relative flex items-center gap-3 rounded-tab py-2.5 pl-4 pr-3 text-sm font-body transition-colors ${
-                isActive ? 'text-ink' : 'text-ink-soft hover:text-ink'
-              }`
-            }
+            className="flex items-center justify-center gap-2 rounded-tab bg-ledger py-2.5 text-sm font-medium text-paper transition-colors hover:bg-ledger-dim"
           >
-            {({ isActive }) => (
-              <>
-                <NavTab isActive={isActive} />
-                <Icon size={19} weight={isActive ? 'duotone' : 'regular'} />
-                <span className={isActive ? 'font-medium' : ''}>{label}</span>
-              </>
-            )}
+            <PencilSimpleLine size={17} />
+            New chat
           </NavLink>
-        ))}
+        </div>
 
-        {/* Chat dropdown - sits last so it expands downward into empty space */}
-        <div className="mt-auto pt-1">
+        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3">
+          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              onClick={onNavClick}
+              className={({ isActive }) =>
+                `group relative flex items-center gap-3 rounded-tab py-2.5 pl-4 pr-3 text-sm font-body transition-colors ${
+                  isActive ? 'text-ink' : 'text-ink-soft hover:text-ink'
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <NavTab isActive={isActive} />
+                  <Icon size={19} weight={isActive ? 'duotone' : 'regular'} />
+                  <span className={isActive ? 'font-medium' : ''}>{label}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+
+          {/* Admin link for staff users */}
+          {user?.is_staff && (
+            <NavLink
+              to="/admin"
+              onClick={onNavClick}
+              className={({ isActive }) =>
+                `group relative flex items-center gap-3 rounded-tab py-2.5 pl-4 pr-3 text-sm font-body transition-colors ${
+                  isActive ? 'text-ink font-medium' : 'text-ink-soft hover:text-ink'
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <NavTab isActive={isActive} />
+                  <ShieldCheck size={19} weight={isActive ? 'duotone' : 'regular'} className="text-brass" />
+                  <span>Admin & Metrics</span>
+                </>
+              )}
+            </NavLink>
+          )}
+
+          {/* Chat dropdown */}
+          <div className="mt-auto pt-1">
+            <button
+              type="button"
+              onClick={() => setChatOpen((o) => !o)}
+              className={`group relative flex w-full items-center gap-3 rounded-tab py-2.5 pl-4 pr-3 text-sm font-body transition-colors ${
+                onChatRoute ? 'text-ink' : 'text-ink-soft hover:text-ink'
+              }`}
+              aria-expanded={chatOpen}
+            >
+              <NavTab isActive={onChatRoute} />
+              <ChatCircleDots size={19} weight={onChatRoute ? 'duotone' : 'regular'} />
+              <span className={`flex-1 text-left ${onChatRoute ? 'font-medium' : ''}`}>Chat</span>
+              <CaretDown size={14} className={`transition-transform ${chatOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {chatOpen && (
+              <div className="ml-4 mt-1 space-y-0.5 border-l border-mist pl-3">
+                {loading && (
+                  <p className="py-1 pl-2 font-mono text-[11px] text-ink-soft">Loading…</p>
+                )}
+                {!loading && conversations.length === 0 && (
+                  <p className="py-1 pl-2 font-mono text-[11px] text-ink-soft">No conversations yet</p>
+                )}
+                {conversations.map((c) => (
+                  <NavLink
+                    key={c.id}
+                    to={`/chat/${c.id}`}
+                    className={({ isActive }) =>
+                      `group/convo flex items-center justify-between rounded-tab py-1.5 pl-2 pr-1 text-xs transition-colors ${
+                        isActive ? 'bg-paper text-ink font-medium' : 'text-ink-soft hover:text-ink'
+                      }`
+                    }
+                  >
+                    <span className="min-w-0 flex-1 truncate">{c.title || 'New Conversation'}</span>
+                    <button
+                      onClick={(e) => handleDeleteConversation(e, c.id)}
+                      className="ml-1 shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:text-crimson group-hover/convo:opacity-100 touch:opacity-100"
+                      title="Delete"
+                    >
+                      <Trash size={12} />
+                    </button>
+                  </NavLink>
+                ))}
+              </div>
+            )}
+          </div>
+        </nav>
+
+        {/* Bottom AI Settings Shortcut & Version */}
+        <div className="border-t border-mist p-3 space-y-2">
           <button
             type="button"
-            onClick={() => setChatOpen((o) => !o)}
-            className={`group relative flex w-full items-center gap-3 rounded-tab py-2.5 pl-4 pr-3 text-sm font-body transition-colors ${
-              onChatRoute ? 'text-ink' : 'text-ink-soft hover:text-ink'
-            }`}
-            aria-expanded={chatOpen}
+            onClick={() => setAiSettingsOpen(true)}
+            className="w-full flex items-center gap-2.5 rounded-tab px-3 py-2 font-mono text-xs text-ink-soft hover:text-ink hover:bg-paper transition-colors"
           >
-            <NavTab isActive={onChatRoute} />
-            <ChatCircleDots size={19} weight={onChatRoute ? 'duotone' : 'regular'} />
-            <span className={`flex-1 text-left ${onChatRoute ? 'font-medium' : ''}`}>Chat</span>
-            <CaretDown size={14} className={`transition-transform ${chatOpen ? 'rotate-180' : ''}`} />
+            <Cpu size={16} className="text-brass" />
+            <span>AI Models & Keys</span>
           </button>
-
-          {chatOpen && (
-            <div className="ml-4 mt-1 space-y-0.5 border-l border-mist pl-3">
-              {loading && (
-                <p className="py-1 pl-2 font-mono text-[11px] text-ink-soft">Loading…</p>
-              )}
-              {!loading && conversations.length === 0 && (
-                <p className="py-1 pl-2 font-mono text-[11px] text-ink-soft">No conversations yet</p>
-              )}
-              {conversations.map((c) => (
-                <NavLink
-                  key={c.id}
-                  to={`/chat/${c.id}`}
-                  className={({ isActive }) =>
-                    `group/convo flex items-center justify-between rounded-tab py-1.5 pl-2 pr-1 text-xs transition-colors ${
-                      isActive ? 'bg-paper text-ink font-medium' : 'text-ink-soft hover:text-ink'
-                    }`
-                  }
-                >
-                  <span className="min-w-0 flex-1 truncate">{c.title || 'New Conversation'}</span>
-                  <button
-                    onClick={(e) => handleDeleteConversation(e, c.id)}
-                    className="ml-1 shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:text-crimson group-hover/convo:opacity-100 touch:opacity-100"
-                    title="Delete"
-                  >
-                    <Trash size={12} />
-                  </button>
-                </NavLink>
-              ))}
-            </div>
-          )}
+          <div className="px-2 font-mono text-[10px] text-ink-soft/70">
+            Reading Room • Production
+          </div>
         </div>
-      </nav>
+      </aside>
 
-      <div className="border-t border-mist px-5 py-4 font-mono text-[11px] text-ink-soft">
-        v0.1 — stage 10
-      </div>
-    </aside>
+      <AiSettingsModal
+        isOpen={aiSettingsOpen}
+        onClose={() => setAiSettingsOpen(false)}
+      />
+    </>
   )
 }
