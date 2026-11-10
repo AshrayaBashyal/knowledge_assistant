@@ -148,6 +148,7 @@ if HAS_CLOUDINARY and CLOUDINARY_CLOUD_NAME:
             "BACKEND": staticfiles_backend
         },
     }
+    STATICFILES_STORAGE = staticfiles_backend
 else:
     STORAGES = {
         "default": {
