@@ -127,37 +127,38 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # File Storage Configuration
-staticfiles_backend = (
-    "whitenoise.storage.CompressedStaticFilesStorage"
-    if HAS_WHITENOISE
-    else "django.contrib.staticfiles.storage.StaticFilesStorage"
-)
-
 CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
+
 if HAS_CLOUDINARY and CLOUDINARY_CLOUD_NAME:
     CLOUDINARY_STORAGE = {
         "CLOUD_NAME": CLOUDINARY_CLOUD_NAME,
         "API_KEY": os.getenv("CLOUDINARY_API_KEY"),
         "API_SECRET": os.getenv("CLOUDINARY_API_SECRET"),
     }
-    STORAGES = {
-        "default": {
-            "BACKEND": "cloudinary_storage.storage.RawMediaCloudinaryStorage"
-        },
-        "staticfiles": {
-            "BACKEND": staticfiles_backend
-        },
-    }
-    STATICFILES_STORAGE = staticfiles_backend
+    DEFAULT_FILE_STORAGE = (
+        "cloudinary_storage.storage.RawMediaCloudinaryStorage"
+    )
+
+    default_storage_backend = (
+        "cloudinary_storage.storage.RawMediaCloudinaryStorage"
+    )
 else:
-    STORAGES = {
-        "default": {
-            "BACKEND": "django.core.files.storage.FileSystemStorage",
-        },
-        "staticfiles": {
-            "BACKEND": staticfiles_backend
-        },
-    }
+    default_storage_backend = (
+        "django.core.files.storage.FileSystemStorage"
+    )
+
+STORAGES = {
+    "default": {
+        "BACKEND": default_storage_backend,
+    },
+    "staticfiles": {
+        "BACKEND": (
+            "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            if HAS_WHITENOISE
+            else "django.contrib.staticfiles.storage.StaticFilesStorage"
+        ),
+    },
+}
 
 MEDIA_ROOT = BASE_DIR / "media"
 MEDIA_URL = "/media/"
