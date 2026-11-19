@@ -1,6 +1,8 @@
 from django.urls import include, path
+from core.views import health_check
 
 urlpatterns = [
+    path("health/", health_check, name="health-check"),
     path("accounts/", include("apps.accounts.urls")),
     path("chat/", include("apps.chat.urls")),
     path("documents/", include("apps.documents.urls")),

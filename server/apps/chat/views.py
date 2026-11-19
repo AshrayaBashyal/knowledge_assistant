@@ -4,6 +4,7 @@ import time
 from collections.abc import Iterator
 
 from django.conf import settings
+from django.db import DatabaseError
 from django.http import StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -13,6 +14,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from ai.agents.service import build_agent
+from apps.analytics.models import ApiMetric, ToolInvocation
 from apps.chat.models import Conversation, Message
 from apps.chat.serializers import (
     ChatMessageInputSerializer,
@@ -108,7 +110,39 @@ def _describe_sources(chunks: list) -> list[dict]:
     ]
 
 
-def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
+def _record_stream_duration(request) -> None:
+    metric_id = getattr(request, "_api_metric_id", None)
+    started_at = getattr(request, "_request_started_at", None)
+    if metric_id is None or started_at is None:
+        return
+
+    try:
+        ApiMetric.objects.filter(pk=metric_id).update(
+            duration_ms=round((time.monotonic() - started_at) * 1000, 2)
+        )
+    except DatabaseError:
+        logger.exception("Could not update streamed chat request metric.")
+
+
+def _record_tool_invocation(
+    conversation: Conversation, tool_name: str, duration_ms: float
+) -> None:
+    try:
+        ToolInvocation.objects.create(
+            user_id=conversation.user_id,
+            tool=tool_name,
+            duration_ms=duration_ms,
+        )
+    except DatabaseError:
+        logger.exception(
+            "Could not persist tool invocation metric.",
+            extra={"conversation_id": conversation.id, "tool": tool_name},
+        )
+
+
+def _stream_chat_response(
+    conversation: Conversation, request
+) -> Iterator[str]:
     """
     Generator that:
       - tells the client which conversation this is (event: meta)
@@ -187,19 +221,28 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
                 # Scan through all the tool messages produced during this step
                 for tool_message in tool_update.get("messages", []):
                     tool_name = getattr(tool_message, "name", None)
-                    if not tool_name or tool_name in tools_used:
-                        continue  # Skip invalid entries or tools we already broadcasted to the UI
-                    
-                    # Deduplicate: Track this tool so we don't alert the UI multiple times for one call
-                    tools_used.add(tool_name)
+                    if not tool_name:
+                        continue
 
-                    # Measures how long each tool call takes from the moment the agent decides to use it until the result is returned. This works for all tools, including ones that can't use @log_call, though it also includes a small amount of agent overhead, but the only option that's provider-independent.
-                    started_at = tool_call_started_at.get(tool_name)
-                    duration_ms = (
-                        round((time.monotonic() - started_at) * 1000, 2)
-                        if started_at
+                    tool_call_id = getattr(tool_message, "tool_call_id", None)
+                    started_at = (
+                        tool_call_started_at.pop(tool_call_id, None)
+                        if tool_call_id
                         else None
                     )
+                    if started_at is None:
+                        started_at = tool_call_started_at.pop(tool_name, None)
+                    duration_ms = (
+                        round((time.monotonic() - started_at) * 1000, 2)
+                        if started_at is not None
+                        else 0
+                    )
+                    _record_tool_invocation(conversation, tool_name, duration_ms)
+
+                    if tool_name in tools_used:
+                        continue
+                    tools_used.add(tool_name)
+
                     logger.info(
                         "tool_call",
                         extra={
@@ -231,7 +274,22 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
                 
             # FILTER 2: Skip structural tool arguments and function call setups.
             # If the model is outputting internal JSON schemas to configure a tool, keep it hidden from the UI.
-            if getattr(token, "tool_calls", None):
+            tool_calls = getattr(token, "tool_calls", None)
+            if tool_calls:
+                for tool_call in tool_calls:
+                    tool_name = (
+                        tool_call.get("name")
+                        if isinstance(tool_call, dict)
+                        else getattr(tool_call, "name", None)
+                    )
+                    tool_call_id = (
+                        tool_call.get("id")
+                        if isinstance(tool_call, dict)
+                        else getattr(tool_call, "id", None)
+                    )
+                    call_key = tool_call_id or tool_name
+                    if call_key:
+                        tool_call_started_at.setdefault(call_key, time.monotonic())
                 continue  
                 
             # OUTPUT: If the token survives the filters and contains genuine message text, save it to the complete buffer string and push the raw text segment to the client UI.
@@ -248,7 +306,8 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
                         full_reply += text_val
                         yield _sse_event("token", {"content": text_val})
                 
-    except Exception as exc:  
+    except Exception as exc:
+        _record_stream_duration(request)
         logger.exception(
             "chat_turn_failed",
             extra={
@@ -283,6 +342,7 @@ def _stream_chat_response(conversation: Conversation) -> Iterator[str]:
         },
     )
  
+    _record_stream_duration(request)
     # Broadcast final termination packet to inform the frontend JavaScript client it can close the SSE connection.
     yield _sse_event("done", {})
 
@@ -334,7 +394,7 @@ class ChatStreamView(APIView):
         )
  
         response = StreamingHttpResponse(
-            _stream_chat_response(conversation),
+            _stream_chat_response(conversation, request._request),
             content_type="text/event-stream",
         )
         response["Cache-Control"] = "no-cache" # Ensure the client gets real-time updates by preventing browser and proxy caching.

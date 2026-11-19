@@ -54,95 +54,57 @@ def _init_pinecone(user_id: int, emb: Embeddings, api_key: str, index_name: str)
     """
     Initializes a Pinecone Serverless vector store with auto-index creation and user namespace scoping.
     """
-    try:
-        from pinecone import Pinecone, ServerlessSpec
-        from langchain_pinecone import PineconeVectorStore
-    except ImportError:
-        logger.warning(
-            "Pinecone packages not installed ('pinecone' or 'langchain-pinecone'). "
-            "Falling back to local Chroma storage."
+    from pinecone import Pinecone, ServerlessSpec
+    from langchain_pinecone import PineconeVectorStore
+
+    pc = Pinecone(api_key=api_key)
+
+    if not pc.has_index(index_name):
+        probe_dim = len(emb.embed_query("probe"))
+        logger.info(
+            "Creating Pinecone index '%s' with dimension %s.",
+            index_name,
+            probe_dim,
         )
-        return None
-
-    try:
-        pc = Pinecone(api_key=api_key)
-
-        # In modern Pinecone, check if index exists. If not, auto-create it on the free Serverless tier
-        if not pc.has_index(index_name):
-            # Probe embedding dimension dynamically
-            try:
-                probe_dim = len(emb.embed_query("probe"))
-            except Exception:
-                probe_dim = 768  # Standard for Gemini text-embedding-004
-
-            logger.info(
-                f"Pinecone index '{index_name}' does not exist. "
-                f"Auto-creating serverless index in AWS us-east-1 with dimension {probe_dim}..."
-            )
-            pc.create_index(
-                name=index_name,
-                dimension=probe_dim,
-                metric="cosine",
-                spec=ServerlessSpec(cloud="aws", region="us-east-1"),
-            )
-
-        index = pc.Index(index_name)
-        raw_store = PineconeVectorStore(
-            index=index,
-            embedding=emb,
-            namespace=f"user_{user_id}",
+        pc.create_index(
+            name=index_name,
+            dimension=probe_dim,
+            metric="cosine",
+            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
         )
-        return NamespacedVectorStoreWrapper(raw_store, namespace=f"user_{user_id}")
-    except Exception as exc:
-        logger.exception(
-            f"Failed to initialize Pinecone vector store: {exc}. "
-            "Falling back to local Chroma."
-        )
-        return None
+
+    index = pc.Index(index_name)
+    raw_store = PineconeVectorStore(
+        index=index,
+        embedding=emb,
+        namespace=f"user_{user_id}",
+    )
+    return NamespacedVectorStoreWrapper(raw_store, namespace=f"user_{user_id}")
 
 
 def _init_qdrant(user_id: int, emb: Embeddings, url: str, api_key: str, collection: str):
     """
     Initializes a Qdrant Cloud vector store (Permanent Free 1GB Cluster).
     """
-    try:
-        from qdrant_client import QdrantClient
-        from qdrant_client.http.models import Distance, VectorParams
-        from langchain_qdrant import QdrantVectorStore
-    except ImportError:
-        logger.warning(
-            "Qdrant packages not installed ('qdrant-client' or 'langchain-qdrant'). "
-            "Falling back to local Chroma."
-        )
-        return None
+    from qdrant_client import QdrantClient
+    from qdrant_client.http.models import Distance, VectorParams
+    from langchain_qdrant import QdrantVectorStore
 
-    try:
-        client = QdrantClient(url=url, api_key=api_key)
-        user_collection = f"{collection}_user_{user_id}"
+    client = QdrantClient(url=url, api_key=api_key)
+    user_collection = f"{collection}_user_{user_id}"
 
-        if not client.collection_exists(user_collection):
-            try:
-                probe_dim = len(emb.embed_query("probe"))
-            except Exception:
-                probe_dim = 768
-
-            client.create_collection(
-                collection_name=user_collection,
-                vectors_config=VectorParams(size=probe_dim, distance=Distance.COSINE),
-            )
-
-        raw_store = QdrantVectorStore(
-            client=client,
+    if not client.collection_exists(user_collection):
+        probe_dim = len(emb.embed_query("probe"))
+        client.create_collection(
             collection_name=user_collection,
-            embedding=emb,
+            vectors_config=VectorParams(size=probe_dim, distance=Distance.COSINE),
         )
-        return raw_store
-    except Exception as exc:
-        logger.exception(
-            f"Failed to initialize Qdrant vector store: {exc}. "
-            "Falling back to local Chroma."
-        )
-        return None
+
+    return QdrantVectorStore(
+        client=client,
+        collection_name=user_collection,
+        embedding=emb,
+    )
 
 
 def _init_chroma(user_id: int, emb: Embeddings):
@@ -171,7 +133,9 @@ def get_vector_store(user_id: int, embeddings: Embeddings | None = None):
     2. Qdrant Cloud (Permanent Free 1GB cluster):
        Uses user-level collections with auto-collection creation.
     3. Chroma (Local / SQLite / Persistent):
-       Zero-configuration default fallback for local dev or when cloud vector DBs are unset.
+       Zero-configuration default for local development or when no cloud store is configured.
+       Errors from an explicitly configured cloud store are surfaced instead of silently
+       moving data into local, potentially ephemeral storage.
     """
     emb = embeddings or get_embeddings()
 
@@ -180,19 +144,50 @@ def get_vector_store(user_id: int, embeddings: Embeddings | None = None):
     # 1. Pinecone
     pinecone_key = os.getenv("PINECONE_API_KEY", "").strip()
     pinecone_index = os.getenv("PINECONE_INDEX_NAME", "knowledge-assistant").strip()
-    if provider == "pinecone" or (not provider and pinecone_key):
-        store = _init_pinecone(user_id, emb, pinecone_key, pinecone_index)
-        if store is not None:
-            return store
+    if (
+        pinecone_key.lower().startswith("your_")
+        and (provider == "pinecone" or not provider)
+    ):
+        raise ValueError("Replace the PINECONE_API_KEY placeholder with a real key.")
+    if provider == "pinecone":
+        if not pinecone_key or not pinecone_index:
+            raise ValueError(
+                "PINECONE_API_KEY and PINECONE_INDEX_NAME are required "
+                "when VECTOR_STORE_PROVIDER=pinecone."
+            )
+        return _init_pinecone(user_id, emb, pinecone_key, pinecone_index)
+    if not provider and pinecone_key:
+        if not pinecone_index:
+            raise ValueError("PINECONE_INDEX_NAME is required when Pinecone is configured.")
+        return _init_pinecone(user_id, emb, pinecone_key, pinecone_index)
 
     # 2. Qdrant Cloud
     qdrant_url = os.getenv("QDRANT_URL", "").strip()
     qdrant_key = os.getenv("QDRANT_API_KEY", "").strip()
     qdrant_coll = os.getenv("QDRANT_COLLECTION_NAME", "knowledge_assistant").strip()
-    if provider == "qdrant" or (not provider and qdrant_url and qdrant_key):
-        store = _init_qdrant(user_id, emb, qdrant_url, qdrant_key, qdrant_coll)
-        if store is not None:
-            return store
+    if qdrant_key.lower().startswith("your_") and (
+        provider == "qdrant" or not provider
+    ):
+        raise ValueError("Replace the QDRANT_API_KEY placeholder with a real key.")
+    if provider == "qdrant":
+        if not qdrant_url or not qdrant_key or not qdrant_coll:
+            raise ValueError(
+                "QDRANT_URL, QDRANT_API_KEY, and QDRANT_COLLECTION_NAME are required "
+                "when VECTOR_STORE_PROVIDER=qdrant."
+            )
+        return _init_qdrant(user_id, emb, qdrant_url, qdrant_key, qdrant_coll)
+    if not provider and (qdrant_url or qdrant_key):
+        if not qdrant_url or not qdrant_key or not qdrant_coll:
+            raise ValueError(
+                "Set QDRANT_URL, QDRANT_API_KEY, and QDRANT_COLLECTION_NAME "
+                "together, or leave them empty."
+            )
+        return _init_qdrant(user_id, emb, qdrant_url, qdrant_key, qdrant_coll)
+
+    if provider and provider != "chroma":
+        raise ValueError(
+            "VECTOR_STORE_PROVIDER must be 'pinecone', 'qdrant', or 'chroma'."
+        )
 
     # 3. Local Chroma fallback
     return _init_chroma(user_id, emb)

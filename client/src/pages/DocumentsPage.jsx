@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { FileText, FilePdf, UploadSimple, Trash, DownloadSimple, WarningCircle } from '@phosphor-icons/react'
+import { FileText, FilePdf, UploadSimple, Trash, DownloadSimple } from '@phosphor-icons/react'
 import { FileMd } from '@phosphor-icons/react'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
@@ -161,9 +161,11 @@ export default function DocumentsPage() {
                     </p>
                     <div className="mt-2">
                       <IndexButton
+                        key={`${doc.id}:${doc.index_status}:${doc.index_error}`}
                         onTrigger={() => triggerDocumentIndex(doc.id)}
                         onPoll={() => fetchDocumentIndexStatus(doc.id)}
-                        initialStatus={null}
+                        initialStatus={doc.index_status}
+                        initialError={doc.index_error}
                       />
                     </div>
                   </div>

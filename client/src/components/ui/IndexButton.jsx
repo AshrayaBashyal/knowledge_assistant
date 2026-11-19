@@ -17,10 +17,10 @@ const STATUS = {
 // `onPoll`    calls GET  /retrieval/.../index/
 // Both are passed in by the parent so this component stays source-agnostic
 // (works for documents and notes).
-export default function IndexButton({ onTrigger, onPoll, initialStatus }) {
-  const [status, setStatus] = useState(initialStatus === 'indexed' ? STATUS.indexed : STATUS.idle)
-  const [errorMsg, setErrorMsg] = useState(null)
-  const [pollingEnabled, setPollingEnabled] = useState(false)
+export default function IndexButton({ onTrigger, onPoll, initialStatus, initialError }) {
+  const [status, setStatus] = useState(initialStatus || STATUS.idle)
+  const [errorMsg, setErrorMsg] = useState(initialError || null)
+  const [pollingEnabled, setPollingEnabled] = useState(initialStatus === STATUS.pending)
 
   const fetcher = useCallback(() => onPoll(), [onPoll])
   const stopWhen = useCallback((data) => data.status !== 'pending', [])
@@ -42,7 +42,7 @@ export default function IndexButton({ onTrigger, onPoll, initialStatus }) {
   const { polling } = usePolling({ fetcher, stopWhen, onDone, onError, enabled: pollingEnabled })
 
   async function handleClick() {
-    if (status === STATUS.indexed || status === STATUS.triggering || polling) return
+    if (status === STATUS.triggering || polling) return
     setStatus(STATUS.triggering)
     setErrorMsg(null)
     try {
@@ -57,9 +57,13 @@ export default function IndexButton({ onTrigger, onPoll, initialStatus }) {
 
   if (status === STATUS.indexed) {
     return (
-      <span className="flex items-center gap-1 font-mono text-[11px] text-ledger">
-        <CheckCircle size={13} weight="fill" /> indexed
-      </span>
+      <button
+        onClick={handleClick}
+        className="flex items-center gap-1 font-mono text-[11px] text-ledger hover:underline"
+        title="Re-index for AI search"
+      >
+        <CheckCircle size={13} weight="fill" /> indexed <ArrowsClockwise size={12} />
+      </button>
     )
   }
 

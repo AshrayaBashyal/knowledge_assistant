@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Users,
   FileText,
@@ -8,13 +8,10 @@ import {
   Database,
   ArrowClockwise,
   MagnifyingGlass,
-  CheckCircle,
-  ShieldCheck,
   Funnel,
   CaretDown,
   Cards,
   NotePencil,
-  Brain,
 } from '@phosphor-icons/react'
 import { fetchAdminMetrics, fetchAdminLogs } from '../services/adminService'
 
@@ -22,7 +19,7 @@ export default function AdminDashboardPage() {
   const [metrics, setMetrics] = useState(null)
   const [logs, setLogs] = useState([])
   const [loadingMetrics, setLoadingMetrics] = useState(true)
-  const [loadingLogs, setLoadingLogs] = useState(true)
+  const [loadingLogs, setLoadingLogs] = useState(false)
   const [error, setError] = useState(null)
 
   // Log filters
@@ -31,22 +28,7 @@ export default function AdminDashboardPage() {
   const [expandedLogIdx, setExpandedLogIdx] = useState(null)
   const [activeTab, setActiveTab] = useState('overview') // 'overview' | 'logs'
 
-  useEffect(() => {
-    loadAll()
-  }, [])
-
-  useEffect(() => {
-    if (activeTab === 'logs') {
-      loadLogs()
-    }
-  }, [logLevel, activeTab])
-
-  async function loadAll() {
-    setError(null)
-    await Promise.all([loadMetrics(), loadLogs()])
-  }
-
-  async function loadMetrics() {
+  const loadMetrics = useCallback(async () => {
     setLoadingMetrics(true)
     try {
       const data = await fetchAdminMetrics()
@@ -56,9 +38,9 @@ export default function AdminDashboardPage() {
     } finally {
       setLoadingMetrics(false)
     }
-  }
+  }, [])
 
-  async function loadLogs() {
+  const loadLogs = useCallback(async () => {
     setLoadingLogs(true)
     try {
       const res = await fetchAdminLogs({ level: logLevel, search: searchQuery })
@@ -68,7 +50,22 @@ export default function AdminDashboardPage() {
     } finally {
       setLoadingLogs(false)
     }
-  }
+  }, [logLevel, searchQuery])
+
+  const loadAll = useCallback(async () => {
+    setError(null)
+    await Promise.all([loadMetrics(), loadLogs()])
+  }, [loadMetrics, loadLogs])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (!cancelled) loadMetrics()
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [loadMetrics])
 
   function handleSearchSubmit(e) {
     e.preventDefault()
@@ -81,7 +78,6 @@ export default function AdminDashboardPage() {
   const latencyList = metrics?.latency_breakdown || []
   const statusDist = metrics?.status_distribution || { '2xx': 0, '4xx': 0, '5xx': 0 }
 
-  const totalStatusCalls = (statusDist['2xx'] || 0) + (statusDist['4xx'] || 0) + (statusDist['5xx'] || 0)
   const maxDayRequests = Math.max(...activity.map((d) => d.requests || 0), 1)
   const totalToolCalls = toolDist.reduce((acc, t) => acc + (t.count || 0), 0)
 
@@ -91,11 +87,13 @@ export default function AdminDashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-mist pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <h1 className="font-display italic text-2xl text-ink">System Observability & Admin</h1>
+            <span className="flex h-2.5 w-2.5 rounded-full bg-brass" />
+            <h1 className="font-display italic text-2xl text-ink">
+              {metrics ? 'System Metrics & Admin' : error ? 'Metrics unavailable' : 'Loading system metrics'}
+            </h1>
           </div>
           <p className="font-mono text-xs text-ink-soft mt-0.5">
-            Production health metrics, AI agent latency, vector store, and structured execution logs
+            Request metrics, indexing status, AI tool usage, and runtime configuration
           </p>
         </div>
 
@@ -110,7 +108,10 @@ export default function AdminDashboardPage() {
               Overview & Charts
             </button>
             <button
-              onClick={() => setActiveTab('logs')}
+              onClick={() => {
+                setActiveTab('logs')
+                loadLogs()
+              }}
               className={`rounded-tab-sm px-3 py-1 font-mono text-xs transition-colors ${
                 activeTab === 'logs' ? 'bg-paper text-ink shadow-xs font-medium' : 'text-ink-soft hover:text-ink'
               }`}
@@ -315,32 +316,34 @@ export default function AdminDashboardPage() {
             {/* Architecture & Cloud Health */}
             <div className="rounded-tab border border-mist bg-paper-dim p-5 space-y-3">
               <h3 className="font-mono text-xs font-semibold text-ink uppercase tracking-wider">
-                Cloud Architecture & Free Tier Status
+                Configured Infrastructure
               </h3>
               <div className="space-y-2.5 font-mono text-xs">
                 <div className="flex items-center justify-between border-b border-mist pb-2">
                   <span className="text-ink-soft">Vector Database</span>
                   <span className="font-semibold text-ink flex items-center gap-1">
-                    <CheckCircle size={14} className="text-emerald-600" />
-                    {kpis?.vector_db ?? 'Pinecone Serverless'}
+                    {kpis?.vector_db ?? 'Unknown'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between border-b border-mist pb-2">
                   <span className="text-ink-soft">Hosted Embeddings</span>
-                  <span className="font-semibold text-ink">Google text-embedding-004 (0 MB RAM)</span>
+                  <span className="font-semibold text-ink">
+                    {kpis?.embedding_provider ?? 'Unknown'} · {kpis?.embedding_model ?? 'Unknown'}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between border-b border-mist pb-2">
                   <span className="text-ink-soft">Background Worker</span>
-                  <span className="font-semibold text-ink">Celery + Upstash Redis (Dual-mode)</span>
+                  <span className="font-semibold text-ink">{kpis?.background_tasks ?? 'Unknown'}</span>
                 </div>
                 <div className="flex items-center justify-between border-b border-mist pb-2">
                   <span className="text-ink-soft">PostgreSQL Storage</span>
-                  <span className="font-semibold text-ink">Neon Serverless (0.5 GB Free)</span>
+                  <span className="font-semibold text-ink">{kpis?.database ?? 'Unknown'}</span>
                 </div>
                 <div className="flex items-center justify-between pt-1">
                   <span className="text-ink-soft">HTTP Status Codes</span>
                   <div className="flex items-center gap-2">
                     <span className="text-emerald-700 font-semibold">{statusDist['2xx']} (2xx)</span>
+                    <span className="text-sky-700 font-semibold">{statusDist['3xx'] || 0} (3xx)</span>
                     <span className="text-amber-700 font-semibold">{statusDist['4xx']} (4xx)</span>
                     <span className="text-rose-700 font-semibold">{statusDist['5xx']} (5xx)</span>
                   </div>
