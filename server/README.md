@@ -67,14 +67,14 @@ end
 subgraph group_retrieval["Retrieval Pipeline"]
   node_loader["Load & Normalize"]
   node_chunk["Chunk Text"]
-  node_embed["MiniLM Embeddings"]
-  node_vector[("ChromaDB")]
+  node_embed["Gemini Embeddings<br/>768 dimensions"]
+  node_vector[("Chroma / Pinecone / Qdrant")]
   node_retriever["Retriever<br/>Cosine Similarity<br/>Top-K Search"]
 end
 
 subgraph group_ai["AI Layer"]
   node_agent["LangChain Agent"]
-  node_llm["Groq LLM"]
+  node_llm["Gemini / Groq LLM"]
 
   node_tools["Agent Tools<br/>search_my_knowledge<br/>remember_fact<br/>tavily_search<br/>calculator<br/>current_time"]
 
@@ -141,9 +141,9 @@ class node_agent,node_llm,node_tools,node_flashgen toneRose
 - **Framework:** Django + Django REST Framework
 - **Auth:** `djangorestframework-simplejwt` (JWT access/refresh tokens)
 - **API docs:** `drf-spectacular` (OpenAPI schema)
-- **LLM:** [Groq](https://groq.com/) via `langchain-groq` (default model: `llama-3.1-8b-instant`)
-- **Vector store:** Chroma
-- **Embeddings:** `sentence-transformers` (default: `all-MiniLM-L6-v2`)
+- **LLM:** Google Gemini or Groq (default model: `gemini-3.5-flash-lite`)
+- **Vector store:** Chroma locally, or Pinecone/Qdrant when configured
+- **Embeddings:** Gemini `gemini-embedding-001` (768 dimensions); Hugging Face can be selected for local use
 - **Background tasks:** Celery, backed by Redis
 - **CORS:** `django-cors-headers`
 
@@ -208,6 +208,8 @@ All configuration is read from environment variables (see `config/settings.py`).
 | `CHROMA_PERSIST_DIR` | `<project>/chroma_data` | Directory for the Chroma vector store |
 | `RETRIEVAL_TOP_K` | `4` | Number of chunks retrieved per query |
 | `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | Embedding model for indexing/retrieval |
+| `EMBEDDING_PROVIDER` | `gemini` | `gemini` or local `huggingface` embeddings |
+| `GEMINI_EMBEDDING_MODEL` | `models/gemini-embedding-001` | Gemini embedding model (768-dimensional output) |
 | `CHUNK_SIZE` | `1000` | Document chunk size (characters) for indexing |
 | `CHUNK_OVERLAP` | `200` | Overlap between consecutive chunks |
 | `RESULTS_PER_SOURCE` | `10` | Max results per source for workspace search |
@@ -215,6 +217,58 @@ All configuration is read from environment variables (see `config/settings.py`).
 | `CHAT_HISTORY_MAX_MESSAGES` | `20` | Max past chat messages replayed to the model per turn |
 | `DOCUMENT_MAX_UPLOAD_SIZE_MB` | `60` | Max allowed upload size for documents |
 | `LOG_LEVEL` | `INFO` | Root logging level |
+
+### Render and Vercel deployment notes
+
+- The frontend defaults to the configured Render API URL in production; set
+  `VITE_API_BASE_URL` in Vercel if the backend URL changes. Vite reads this at
+  build time, so changing it requires a new frontend deployment.
+- Render's free web service can sleep while idle, causing a slow first request.
+  The `/api/health/` endpoint is used as its readiness check.
+- Render Free has a very small shared web instance and no separate free
+  background-worker service. Keep `CELERY_TASK_ALWAYS_EAGER=True` (the default)
+  for the least memory pressure and simplest operation. Indexing and flashcard
+  generation then run inside the request and can take longer. Setting it to
+  `False` starts one Celery `solo` worker beside Gunicorn; this is supported by
+  the startup script but shares the same CPU and memory and can make the service
+  slower or unstable. Upstash Redis supplies the broker, not extra compute.
+- Render's local filesystem is ephemeral. Use Neon for `DATABASE_URL`, Pinecone
+  or Qdrant for vectors, and configure all three `CLOUDINARY_*` values if
+  uploaded documents must survive restarts. Local SQLite, media files, and
+  Chroma data are not durable across instance replacement.
+- This project does not configure Cloudflare R2. Cloudflare DNS in front of
+  Vercel does not require an application code change; use Cloudinary for the
+  current document-upload storage integration.
+- Gemini/Groq model availability, free quotas, and rate limits depend on the
+  provider account and can change. Existing indexed content should be re-indexed
+  after changing the embedding model; use the refresh icon beside an indexed
+  document or note.
+
+#### Existing Render deployment checklist
+
+1. In the Render web service, keep the Free plan and verify the build command
+   installs `server/requirements.txt` and runs `collectstatic`; the start command
+   should be `bash start.sh`.
+2. In **Environment**, verify `DATABASE_URL` is Neon’s pooled connection URL,
+   `SECRET_KEY` is a private generated value, and `DEBUG=False`. Set
+   `CORS_ALLOWED_ORIGINS` to the exact Vercel site origin.
+3. Configure `GEMINI_API_KEY` for the default chat model and embeddings. For
+   durable document indexing, configure `VECTOR_STORE_PROVIDER=pinecone`,
+   `PINECONE_API_KEY`, and `PINECONE_INDEX_NAME`; configure
+   `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and
+   `CLOUDINARY_API_SECRET` together for uploaded files. These are separate
+   provider services and their free-tier availability/quotas can change.
+4. Leave `CELERY_TASK_ALWAYS_EAGER` unset or set it to `True` on Render Free.
+   Do not add a separate Render worker on Free. Upstash is optional in this
+   mode; background jobs do not use it.
+5. In Vercel, ensure the project root is `client` and set
+   `VITE_API_BASE_URL=https://reading-room-emvk.onrender.com` if you want to
+   override the built-in production default. Redeploy Vercel after changing
+   this build-time variable.
+6. Deploy the branch. Render runs `manage.py migrate` on service startup; check
+   its deploy logs for migration completion and confirm
+   `https://reading-room-emvk.onrender.com/api/health/` returns HTTP 200 after
+   the service wakes. No restart or schema edit in Neon is needed.
 
 ## Usage
 

@@ -1,7 +1,10 @@
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import OuterRef, Subquery
 from apps.documents.models import Document
 from apps.documents.serializers import DocumentSerializer, DocumentUploadSerializer
+from apps.retrieval.models import ContentIndex
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, generics, parsers
 from rest_framework.request import Request
@@ -22,7 +25,14 @@ class DocumentListCreateView(generics.ListCreateAPIView):
     parser_classes = [parsers.MultiPartParser, parsers.FormParser]
  
     def get_queryset(self):
-        return Document.objects.filter(user=self.request.user)
+        content_type = ContentType.objects.get_for_model(Document)
+        indexes = ContentIndex.objects.filter(
+            content_type=content_type, object_id=OuterRef("pk")
+        )
+        return Document.objects.filter(user=self.request.user).annotate(
+            index_status=Subquery(indexes.values("status")[:1]),
+            index_error=Subquery(indexes.values("error")[:1]),
+        )
  
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -44,7 +54,14 @@ class DocumentDetailView(generics.RetrieveDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
  
     def get_queryset(self):
-        return Document.objects.filter(user=self.request.user)
+        content_type = ContentType.objects.get_for_model(Document)
+        indexes = ContentIndex.objects.filter(
+            content_type=content_type, object_id=OuterRef("pk")
+        )
+        return Document.objects.filter(user=self.request.user).annotate(
+            index_status=Subquery(indexes.values("status")[:1]),
+            index_error=Subquery(indexes.values("error")[:1]),
+        )
  
     def perform_destroy(self, instance: Document):
         instance.file.delete(save=False)  # remove from storage, not just the DB row

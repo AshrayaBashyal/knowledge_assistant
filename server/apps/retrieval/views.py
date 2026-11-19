@@ -47,6 +47,7 @@ class _BaseIndexView(APIView):
         index.save(update_fields=["status"])
 
         index_content_task.delay(content_type.id, obj.pk)
+        index.refresh_from_db()
 
         serializer = ContentIndexSerializer(index)
         return Response(serializer.data, status=status.HTTP_202_ACCEPTED)

@@ -2,7 +2,6 @@ import { useCallback, useState } from 'react'
 import { NotePencil, PencilSimple, Trash, Plus } from '@phosphor-icons/react'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
-import Spinner from '../components/ui/Spinner'
 import Alert from '../components/ui/Alert'
 import EmptyState from '../components/ui/EmptyState'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
@@ -112,9 +111,11 @@ export default function NotesPage() {
                       {formatDate(note.updated_at)}
                     </span>
                     <IndexButton
+                      key={`${note.id}:${note.index_status}:${note.index_error}`}
                       onTrigger={() => triggerNoteIndex(note.id)}
                       onPoll={() => fetchNoteIndexStatus(note.id)}
-                      initialStatus={null}
+                      initialStatus={note.index_status}
+                      initialError={note.index_error}
                     />
                   </div>
                 </div>

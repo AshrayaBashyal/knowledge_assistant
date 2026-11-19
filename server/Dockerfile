@@ -25,4 +25,4 @@ RUN python manage.py collectstatic --noinput || true
 EXPOSE 8000
 
 # Run migrations and start Gunicorn production server
-CMD ["sh", "-c", "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --threads 4 --timeout 120"]
+CMD ["sh", "-c", "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 1 --threads 4 --timeout 120"]

@@ -1,18 +1,21 @@
 import json
 import logging
+import os
 from datetime import timedelta
 from pathlib import Path
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.db.models import Avg, Count, Sum, Q
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
-from rest_framework import permissions, status
+from rest_framework import permissions
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.analytics.models import ApiMetric
+from apps.analytics.models import ApiMetric, ToolInvocation
 from apps.chat.models import Conversation, Message
 from apps.documents.models import Document
 from apps.flashcards.models import Flashcard, FlashcardSet
@@ -35,10 +38,8 @@ class AdminMetricsView(APIView):
 
     def get(self, request: Request) -> Response:
         now = timezone.now()
-        seven_days_ago = now - timedelta(days=7)
-
         # 1. High level KPIs
-        total_users = User.objects.count()
+        total_users = User.objects.filter(is_active=True).count()
         total_docs = Document.objects.count()
         total_notes = Note.objects.count()
         total_flashcard_sets = FlashcardSet.objects.count()
@@ -49,45 +50,83 @@ class AdminMetricsView(APIView):
 
         # Content index stats
         index_stats = ContentIndex.objects.aggregate(
-            total_chunks=Sum("chunk_count"),
-            completed_count=Count("id", filter=Q(status=ContentIndex.Status.COMPLETED) if hasattr(ContentIndex, 'Status') else Q()),
+            total_chunks=Sum(
+                "chunk_count", filter=Q(status=ContentIndex.Status.INDEXED)
+            ),
+            indexed_count=Count(
+                "id", filter=Q(status=ContentIndex.Status.INDEXED)
+            ),
         )
         total_chunks = index_stats.get("total_chunks") or 0
 
         # API Request & Latency metrics from ApiMetric
         metrics_qs = ApiMetric.objects.all()
-        total_requests = metrics_qs.count()
-        avg_latency = metrics_qs.aggregate(avg=Avg("duration_ms"))["avg"] or 0
-        error_count = metrics_qs.filter(status_code__gte=400).count()
+        metric_summary = metrics_qs.aggregate(
+            total=Count("id"),
+            avg_latency=Avg("duration_ms"),
+            errors=Count("id", filter=Q(status_code__gte=400)),
+            success_2xx=Count(
+                "id", filter=Q(status_code__gte=200, status_code__lt=300)
+            ),
+            redirect_3xx=Count(
+                "id", filter=Q(status_code__gte=300, status_code__lt=400)
+            ),
+            client_err_4xx=Count(
+                "id", filter=Q(status_code__gte=400, status_code__lt=500)
+            ),
+            server_err_5xx=Count("id", filter=Q(status_code__gte=500)),
+        )
+        total_requests = metric_summary["total"]
+        avg_latency = metric_summary["avg_latency"] or 0
+        error_count = metric_summary["errors"]
         error_rate = round((error_count / total_requests * 100), 2) if total_requests > 0 else 0.0
 
         # 2. Activity Chart (Last 7 Days)
+        activity_start = (now - timedelta(days=6)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        request_counts = {
+            item["day"]: item["count"]
+            for item in metrics_qs.filter(created_at__gte=activity_start)
+            .annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(count=Count("id"))
+        }
+        message_counts = {
+            item["day"]: item["count"]
+            for item in Message.objects.filter(created_at__gte=activity_start)
+            .annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(count=Count("id"))
+        }
+        document_counts = {
+            item["day"]: item["count"]
+            for item in Document.objects.filter(uploaded_at__gte=activity_start)
+            .annotate(day=TruncDate("uploaded_at"))
+            .values("day")
+            .annotate(count=Count("id"))
+        }
         activity_days = []
         for i in range(6, -1, -1):
             day_start = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
-            day_end = day_start + timedelta(days=1)
+            day = day_start.date()
             date_label = day_start.strftime("%b %d")
-
-            day_requests = ApiMetric.objects.filter(created_at__gte=day_start, created_at__lt=day_end).count()
-            day_messages = Message.objects.filter(created_at__gte=day_start, created_at__lt=day_end).count()
-            day_docs = Document.objects.filter(created_at__gte=day_start, created_at__lt=day_end).count()
 
             activity_days.append({
                 "date": date_label,
-                "requests": day_requests,
-                "messages": day_messages,
-                "documents": day_docs,
+                "requests": request_counts.get(day, 0),
+                "messages": message_counts.get(day, 0),
+                "documents": document_counts.get(day, 0),
             })
 
         # 3. Tool Usage Breakdown
         tool_counts_qs = (
-            ApiMetric.objects.exclude(tool_called="")
-            .values("tool_called")
+            ToolInvocation.objects.values("tool")
             .annotate(count=Count("id"))
             .order_by("-count")[:8]
         )
         tool_distribution = [
-            {"tool": item["tool_called"], "count": item["count"]}
+            {"tool": item["tool"], "count": item["count"]}
             for item in tool_counts_qs
         ]
         # Add default tool references if empty to show schema in dashboard
@@ -114,10 +153,19 @@ class AdminMetricsView(APIView):
             for item in endpoint_latencies
         ]
 
-        # 5. Status code distribution (2xx, 4xx, 5xx)
-        success_2xx = metrics_qs.filter(status_code__gte=200, status_code__lt=300).count()
-        client_err_4xx = metrics_qs.filter(status_code__gte=400, status_code__lt=500).count()
-        server_err_5xx = metrics_qs.filter(status_code__gte=500).count()
+        # 5. Status code distribution
+        vector_provider = settings.VECTOR_STORE_PROVIDER
+        if not vector_provider:
+            if settings.PINECONE_API_KEY:
+                vector_provider = "pinecone"
+            elif os.getenv("QDRANT_URL") and os.getenv("QDRANT_API_KEY"):
+                vector_provider = "qdrant"
+            else:
+                vector_provider = "chroma"
+        database_name = {
+            "postgresql": "PostgreSQL",
+            "sqlite": "SQLite",
+        }.get(connection.vendor, connection.vendor)
 
         return Response({
             "kpis": {
@@ -130,19 +178,32 @@ class AdminMetricsView(APIView):
                 "total_conversations": total_conversations,
                 "total_messages": total_messages,
                 "total_indexed_chunks": total_chunks,
+                "total_indexed_items": index_stats["indexed_count"],
                 "total_api_requests": total_requests,
                 "avg_latency_ms": round(avg_latency, 1),
                 "error_rate_percent": error_rate,
-                "vector_db": "Pinecone" if settings.PINECONE_API_KEY else "ChromaDB",
-                "embedding_provider": getattr(settings, "EMBEDDING_PROVIDER", "gemini"),
+                "vector_db": vector_provider.title() if vector_provider != "chroma" else "ChromaDB",
+                "embedding_provider": settings.EMBEDDING_PROVIDER,
+                "embedding_model": (
+                    settings.GEMINI_EMBEDDING_MODEL
+                    if settings.EMBEDDING_PROVIDER == "gemini"
+                    else settings.EMBEDDING_MODEL
+                ),
+                "background_tasks": (
+                    "Inline (blocking)"
+                    if settings.CELERY_TASK_ALWAYS_EAGER
+                    else "Redis queue"
+                ),
+                "database": database_name,
             },
             "activity_chart": activity_days,
             "tool_distribution": tool_distribution,
             "latency_breakdown": latency_breakdown,
             "status_distribution": {
-                "2xx": success_2xx,
-                "4xx": client_err_4xx,
-                "5xx": server_err_5xx,
+                "2xx": metric_summary["success_2xx"],
+                "3xx": metric_summary["redirect_3xx"],
+                "4xx": metric_summary["client_err_4xx"],
+                "5xx": metric_summary["server_err_5xx"],
             },
         })
 

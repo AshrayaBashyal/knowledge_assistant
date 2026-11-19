@@ -163,13 +163,31 @@ class ValidateApiKeyView(APIView):
         serializer.is_valid(raise_exception=True)
 
         provider = serializer.validated_data["provider"]
-        api_key = serializer.validated_data["api_key"]
+        api_key = serializer.validated_data.get("api_key", "")
         model = serializer.validated_data.get("model")
+
+        if not api_key:
+            try:
+                saved_settings = request.user.ai_settings
+            except UserAiSetting.DoesNotExist:
+                saved_settings = None
+
+            if saved_settings:
+                api_key = (
+                    saved_settings.gemini_api_key
+                    if provider == "gemini"
+                    else saved_settings.groq_api_key
+                )
+            if not api_key:
+                return Response(
+                    {"detail": "Enter an API key to test this provider."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         try:
             if provider == "gemini":
                 from langchain_google_genai import ChatGoogleGenerativeAI
-                test_model = model or "gemini-2.5-flash-lite"
+                test_model = model or "gemini-3.5-flash-lite"
                 llm = ChatGoogleGenerativeAI(
                     model=test_model,
                     google_api_key=api_key,
@@ -201,8 +219,10 @@ class ValidateApiKeyView(APIView):
                 user_friendly = "Invalid API Key: The key was rejected by the provider."
             elif "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "rate_limit_exceeded" in err_msg:
                 user_friendly = "Quota Exceeded (429): Your API key has reached its rate limit or usage quota."
-            elif "model_not_found" in err_msg:
-                user_friendly = f"Model '{model}' is not available for this API key."
+            elif "model_not_found" in err_msg.lower() or "not_found" in err_msg.lower() or "404" in err_msg:
+                user_friendly = (
+                    f"Model '{model or 'selected model'}' is not available for this API key."
+                )
             else:
                 user_friendly = f"Verification failed: {err_msg[:250]}"
 

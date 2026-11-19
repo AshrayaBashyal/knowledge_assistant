@@ -4,7 +4,8 @@ services:
     env: python
     region: oregon
     plan: free
+    healthCheckPath: /api/health/
 
-    buildCommand: "pip install -r server/requirements.txt && python server/manage.py collectstatic --clear --noinput && python server/manage.py migrate"
+    buildCommand: "pip install -r server/requirements.txt && python server/manage.py collectstatic --clear --noinput"
 
     startCommand: "bash start.sh"

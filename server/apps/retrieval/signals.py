@@ -1,4 +1,5 @@
 from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
@@ -17,14 +18,21 @@ def auto_index_note(sender, instance: Note, **kwargs):
     """
     Notes index automatically on every create/edit - unlike documents, which use an explicit endpoint (in retrieval/views.py). Embedding a short text field is cheap enough that requiring a separate manual step here would just be friction with no real benefit.
 
-    Enqueued as a Celery task rather than run inline, so saving a note no longer blocks the HTTP response on an embedding call.
+    Enqueued as a Celery task; eager mode runs it inline, while a configured
+    worker keeps note saves independent of the embedding request.
 
     The ContentIndex row is created here, synchronously, with status PENDING, before the task is even enqueued - not left for the task to create when it eventually runs. Without this, a client polling /api/retrieval/notes/<id>/index/ right after saving would get a 404 (no row exists yet) until the worker happens to pick the task up, which is a confusing gap for something that should read as "queued" from the very first moment.
     """
 
     content_type = ContentType.objects.get_for_model(instance)
-    ContentIndex.objects.get_or_create(content_type=content_type, object_id=instance.pk)
-    index_content_task.delay(content_type.id, instance.pk)
+    ContentIndex.objects.update_or_create(
+        content_type=content_type,
+        object_id=instance.pk,
+        defaults={"status": ContentIndex.Status.PENDING, "error": ""},
+    )
+    transaction.on_commit(
+        lambda: index_content_task.delay(content_type.id, instance.pk)
+    )
 
 
 @receiver(post_save, sender=Memory)
@@ -33,8 +41,14 @@ def auto_index_memory(sender, instance: Memory, **kwargs):
     than a note, so there's no cost worth deferring indexing for."""
 
     content_type = ContentType.objects.get_for_model(instance)
-    ContentIndex.objects.get_or_create(content_type=content_type, object_id=instance.pk)
-    index_content_task.delay(content_type.id, instance.pk)
+    ContentIndex.objects.update_or_create(
+        content_type=content_type,
+        object_id=instance.pk,
+        defaults={"status": ContentIndex.Status.PENDING, "error": ""},
+    )
+    transaction.on_commit(
+        lambda: index_content_task.delay(content_type.id, instance.pk)
+    )
 
 
 def _cleanup_index(sender, instance, **kwargs):

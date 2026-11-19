@@ -34,8 +34,35 @@ try:
 except ImportError:
     HAS_CLOUDINARY = False
 
-CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "")
-USE_CLOUDINARY = HAS_CLOUDINARY and bool(CLOUDINARY_CLOUD_NAME)
+CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
+CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY", "").strip()
+CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET", "").strip()
+CLOUDINARY_CONFIGURED = all(
+    (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET)
+)
+CLOUDINARY_VALUES = (
+    CLOUDINARY_CLOUD_NAME,
+    CLOUDINARY_API_KEY,
+    CLOUDINARY_API_SECRET,
+)
+if any(value.lower().startswith("your_") for value in CLOUDINARY_VALUES if value):
+    raise ValueError("Replace Cloudinary placeholder values with real credentials.")
+CLOUDINARY_PARTIALLY_CONFIGURED = any(
+    CLOUDINARY_VALUES
+) and not CLOUDINARY_CONFIGURED
+
+if CLOUDINARY_PARTIALLY_CONFIGURED:
+    raise ValueError(
+        "Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and "
+        "CLOUDINARY_API_SECRET together, or leave all three empty."
+    )
+if CLOUDINARY_CONFIGURED and not HAS_CLOUDINARY:
+    raise ImportError(
+        "Cloudinary credentials are configured, but cloudinary storage "
+        "packages are not installed."
+    )
+
+USE_CLOUDINARY = HAS_CLOUDINARY and CLOUDINARY_CONFIGURED
 
 
 # Application definition
@@ -181,8 +208,8 @@ MEDIA_ROOT = BASE_DIR / "media"
 if USE_CLOUDINARY:
     CLOUDINARY_STORAGE = {
         "CLOUD_NAME": CLOUDINARY_CLOUD_NAME,
-        "API_KEY": os.getenv("CLOUDINARY_API_KEY"),
-        "API_SECRET": os.getenv("CLOUDINARY_API_SECRET"),
+        "API_KEY": CLOUDINARY_API_KEY,
+        "API_SECRET": CLOUDINARY_API_SECRET,
     }
 
     DEFAULT_STORAGE_BACKEND = (
@@ -322,6 +349,10 @@ EMBEDDING_MODEL = os.getenv(
 )
 
 EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "gemini")
+GEMINI_EMBEDDING_MODEL = os.getenv(
+    "GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001"
+)
+VECTOR_STORE_PROVIDER = os.getenv("VECTOR_STORE_PROVIDER", "").strip().lower()
 
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "")
@@ -360,7 +391,7 @@ CELERY_BROKER_URL = CELERY_REDIS_URL
 CELERY_RESULT_BACKEND = CELERY_REDIS_URL
 
 if CELERY_REDIS_URL.startswith("rediss://"):
-    ssl_reqs = os.getenv("REDIS_SSL_CERT_REQS", "CERT_NONE")
+    ssl_reqs = os.getenv("REDIS_SSL_CERT_REQS", "CERT_REQUIRED")
 
     CELERY_BROKER_URL = (
         f"{CELERY_REDIS_URL}?ssl_cert_reqs={ssl_reqs}"
@@ -373,6 +404,7 @@ if CELERY_REDIS_URL.startswith("rediss://"):
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
+CELERY_TASK_IGNORE_RESULT = True
 CELERY_TIMEZONE = TIME_ZONE
 
 

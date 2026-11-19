@@ -5,9 +5,9 @@ from django.db import models
 class Note(models.Model):
     """
     A user-authored note. Unlike Document, there's no file - content is
-    just a text field - so indexing a note is cheap enough to happen
-    synchronously on every save (in retrieval/signals.py) rather than
-    needing an explicit trigger endpoint the way document upload does.
+    just a text field - so indexing is triggered automatically on every
+    save (in retrieval/signals.py) rather than needing a separate manual
+    action. In eager Celery mode this work runs inside the save request.
     """
 
     user = models.ForeignKey(

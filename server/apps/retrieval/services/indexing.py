@@ -39,20 +39,16 @@ def index_content(obj) -> ContentIndex:
 
         vector_store = get_vector_store(obj.user_id)
 
-        # Clear any previous chunks for this document first, so re-running indexing (e.g. after a fix) doesn't leave duplicate entries.
-        # vector_store.delete(where={"document_id": document.id})
-
-        # Delete by reconstructed ids, not a `where` metadata filter.`where` happens to work with Chroma (it forwards **kwargs to theunderlying collection), but that's not part of LangChain'sportable VectorStore interface - a different backend might notsupport it. Chunk ids are deterministic (doc{id}-chunk{i}), so the exact ids a previous run created can always be reconstructedand deleted directly with `ids=`, which every VectorStoreimplementation supports.
-
-        # We delete up to max(previous count, new count), not justrange(len(chunks)): if this re-index produced *fewer* chunks than before, chunks beyond the new count would otherwise be orphaned in the vector store forever.
-
-        previous_chunk_count = max(index.chunk_count, len(chunks))
-        if previous_chunk_count > 0:
-            stale_ids = [f"{source_type}{obj.pk}-chunk{i}" for i in range(previous_chunk_count)]
-            vector_store.delete(ids=stale_ids)
-
+        # Upsert deterministic ids first so a failed embedding call keeps old vectors intact.
         ids = [f"{source_type}{obj.pk}-chunk{i}" for i in range(len(chunks))]
         vector_store.add_documents(chunks, ids=ids)
+
+        if index.chunk_count > len(chunks):
+            stale_ids = [
+                f"{source_type}{obj.pk}-chunk{i}"
+                for i in range(len(chunks), index.chunk_count)
+            ]
+            vector_store.delete(ids=stale_ids)
 
         index.status = ContentIndex.Status.INDEXED
         index.chunk_count = len(chunks)
@@ -73,7 +69,6 @@ def index_content(obj) -> ContentIndex:
     except Exception as exc:
         index.status = ContentIndex.Status.FAILED
         index.error = str(exc)
-        index.chunk_count = 0
 
         logger.exception(
             "indexing_failed",
