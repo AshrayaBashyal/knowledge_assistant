@@ -257,7 +257,11 @@ All configuration is read from environment variables (see `config/settings.py`).
    `PINECONE_API_KEY`, and `PINECONE_INDEX_NAME`; configure
    `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and
    `CLOUDINARY_API_SECRET` together for uploaded files. These are separate
-   provider services and their free-tier availability/quotas can change.
+   provider services and their free-tier availability/quotas can change. A
+   user's Groq BYOK key only covers chat; embeddings still require the server's
+   Gemini API key. Pinecone index creation currently targets Serverless AWS
+   `us-east-1`, cosine distance, and 768 dimensions; use these settings if you
+   create the index manually.
 4. Leave `CELERY_TASK_ALWAYS_EAGER` unset or set it to `True` on Render Free.
    Do not add a separate Render worker on Free. Upstash is optional in this
    mode; background jobs do not use it.
