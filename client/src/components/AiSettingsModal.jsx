@@ -18,16 +18,15 @@ import {
 } from '../services/aiSettingsService'
 
 const GEMINI_MODELS = [
-  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite (Fastest & Free)' },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Balanced)' },
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Standard)' },
-  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Deep Reasoning)' },
+  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite (Fast, efficient)' },
+  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite (Efficient)' },
+  { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash (Balanced)' },
+  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Latest)' },
 ]
 
 const GROQ_MODELS = [
   { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile (Recommended / High Intelligence)' },
   { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant (Ultra-Low Latency)' },
-  { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B (32k Context Window)' },
 ]
 
 export default function AiSettingsModal({ isOpen, onClose }) {
@@ -49,18 +48,25 @@ export default function AiSettingsModal({ isOpen, onClose }) {
   useEffect(() => {
     if (isOpen) {
       loadSettings()
-    } else {
-      setTestResult(null)
-      setFeedback(null)
     }
   }, [isOpen])
 
   async function loadSettings() {
+    setTestResult(null)
+    setFeedback(null)
     setLoading(true)
     try {
       const data = await fetchAiSettings()
       setProvider(data.provider || 'default')
-      setPreferredModel(data.preferred_model || '')
+      const availableModels = data.provider === 'groq' ? GROQ_MODELS : GEMINI_MODELS
+      const savedModel = data.preferred_model || ''
+      setPreferredModel(
+        savedModel && availableModels.some((model) => model.id === savedModel)
+          ? savedModel
+          : data.provider === 'groq'
+            ? 'llama-3.1-8b-instant'
+            : 'gemini-3.5-flash-lite'
+      )
       setMaskedGemini(data.masked_gemini_key || '')
       setMaskedGroq(data.masked_groq_key || '')
       setHasGeminiKey(data.has_gemini_key || false)
@@ -213,7 +219,7 @@ export default function AiSettingsModal({ isOpen, onClose }) {
                     type="button"
                     onClick={() => {
                       setProvider('gemini')
-                      setPreferredModel('gemini-2.5-flash-lite')
+                      setPreferredModel('gemini-3.5-flash-lite')
                       setTestResult(null)
                     }}
                     className={`flex flex-col items-center justify-center p-3 rounded-tab border text-xs font-medium transition-all ${
@@ -230,7 +236,7 @@ export default function AiSettingsModal({ isOpen, onClose }) {
                     type="button"
                     onClick={() => {
                       setProvider('groq')
-                      setPreferredModel('llama-3.3-70b-versatile')
+                      setPreferredModel('llama-3.1-8b-instant')
                       setTestResult(null)
                     }}
                     className={`flex flex-col items-center justify-center p-3 rounded-tab border text-xs font-medium transition-all ${
@@ -268,11 +274,14 @@ export default function AiSettingsModal({ isOpen, onClose }) {
                       Get free key <ArrowSquareOut size={12} />
                     </a>
                   </div>
+                  <p className="font-mono text-[11px] text-ink-soft">
+                    Model availability and free-tier quotas can change; check your Google AI Studio account.
+                  </p>
 
                   <div>
                     <label className="block font-mono text-[11px] text-ink-soft mb-1">Model Selection</label>
                     <select
-                      value={preferredModel || 'gemini-2.5-flash-lite'}
+                      value={preferredModel || 'gemini-3.5-flash-lite'}
                       onChange={(e) => setPreferredModel(e.target.value)}
                       className="w-full rounded-tab border border-mist bg-paper px-3 py-2 text-xs text-ink focus:border-brass focus:outline-hidden"
                     >
@@ -312,11 +321,14 @@ export default function AiSettingsModal({ isOpen, onClose }) {
                       Get free key <ArrowSquareOut size={12} />
                     </a>
                   </div>
+                  <p className="font-mono text-[11px] text-ink-soft">
+                    Only select models your Groq account includes on its free plan. Access and limits can change.
+                  </p>
 
                   <div>
                     <label className="block font-mono text-[11px] text-ink-soft mb-1">Model Selection</label>
                     <select
-                      value={preferredModel || 'llama-3.3-70b-versatile'}
+                      value={preferredModel || 'llama-3.1-8b-instant'}
                       onChange={(e) => setPreferredModel(e.target.value)}
                       className="w-full rounded-tab border border-mist bg-paper px-3 py-2 text-xs text-ink focus:border-brass focus:outline-hidden"
                     >

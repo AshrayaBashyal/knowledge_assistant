@@ -30,3 +30,22 @@ class ApiMetric(models.Model):
 
     def __str__(self) -> str:
         return f"{self.method} {self.path} - {self.status_code} ({self.duration_ms}ms)"
+
+
+class ToolInvocation(models.Model):
+    """One tool execution completed during a streamed chat turn."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tool_invocations",
+    )
+    tool = models.CharField(max_length=100, db_index=True)
+    duration_ms = models.FloatField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["created_at", "tool"])]
+
+    def __str__(self) -> str:
+        return f"{self.tool} ({self.duration_ms}ms)"

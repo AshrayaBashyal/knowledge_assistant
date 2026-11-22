@@ -112,11 +112,9 @@ class UserAiSettingSerializer(serializers.ModelSerializer):
 class ValidateApiKeySerializer(serializers.Serializer):
     """Payload for live testing an API key before saving."""
     provider = serializers.ChoiceField(choices=["gemini", "groq"])
-    api_key = serializers.CharField(max_length=255)
+    api_key = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
     model = serializers.CharField(max_length=100, required=False, default="")
 
     def validate_api_key(self, value: str) -> str:
         cleaned = value.strip()
-        if not cleaned:
-            raise serializers.ValidationError("API key cannot be empty.")
         return cleaned

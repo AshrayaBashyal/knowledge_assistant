@@ -10,11 +10,21 @@ class DocumentSerializer(serializers.ModelSerializer):
     shape after a successful upload."""
  
     download_url = serializers.SerializerMethodField()
+    index_status = serializers.CharField(read_only=True, allow_null=True, default=None)
+    index_error = serializers.CharField(read_only=True, allow_null=True, default=None)
  
     class Meta:
         model = Document
-        fields = ["id", "original_filename", "file_type", "uploaded_at", "download_url"]
-        read_only_fields = ["id", "original_filename", "file_type", "uploaded_at", "download_url"]
+        fields = [
+            "id",
+            "original_filename",
+            "file_type",
+            "uploaded_at",
+            "download_url",
+            "index_status",
+            "index_error",
+        ]
+        read_only_fields = fields
  
     def get_download_url(self, obj: Document) -> str:
         request = self.context.get("request")

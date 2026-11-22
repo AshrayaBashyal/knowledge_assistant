@@ -1,8 +1,11 @@
 from drf_spectacular.utils import extend_schema
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import OuterRef, Subquery
 from rest_framework import generics, permissions
 
 from apps.notes.models import Note
 from apps.notes.serializers import NoteSerializer
+from apps.retrieval.models import ContentIndex
 
 
 @extend_schema(tags=["notes"])
@@ -22,7 +25,14 @@ class NoteListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Note.objects.filter(user=self.request.user)
+        content_type = ContentType.objects.get_for_model(Note)
+        indexes = ContentIndex.objects.filter(
+            content_type=content_type, object_id=OuterRef("pk")
+        )
+        return Note.objects.filter(user=self.request.user).annotate(
+            index_status=Subquery(indexes.values("status")[:1]),
+            index_error=Subquery(indexes.values("error")[:1]),
+        )
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -40,4 +50,15 @@ class NoteDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Note.objects.filter(user=self.request.user)
+        content_type = ContentType.objects.get_for_model(Note)
+        indexes = ContentIndex.objects.filter(
+            content_type=content_type, object_id=OuterRef("pk")
+        )
+        return Note.objects.filter(user=self.request.user).annotate(
+            index_status=Subquery(indexes.values("status")[:1]),
+            index_error=Subquery(indexes.values("error")[:1]),
+        )
+
+    def perform_update(self, serializer):
+        serializer.save()
+        serializer.instance = self.get_queryset().get(pk=serializer.instance.pk)

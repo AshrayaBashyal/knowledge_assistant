@@ -1,6 +1,8 @@
 import logging
 import time
 
+from django.db import DatabaseError
+
 logger = logging.getLogger("core.request")
 
 
@@ -19,6 +21,7 @@ class RequestLoggingMiddleware:
 
     def __call__(self, request):
         start = time.monotonic()
+        request._request_started_at = start
         response = self.get_response(request)
         duration_ms = round((time.monotonic() - start) * 1000, 2)
 
@@ -37,17 +40,23 @@ class RequestLoggingMiddleware:
         )
 
         # Record API metric for admin dashboard (skip log viewer polling to avoid recursive noise)
-        if request.path.startswith("/api/") and not request.path.startswith("/api/admin/logs"):
+        if (
+            request.path.startswith("/api/")
+            and request.path != "/api/health/"
+            and not request.path.startswith("/api/admin/logs")
+        ):
             try:
                 from apps.analytics.models import ApiMetric
-                ApiMetric.objects.create(
+                metric = ApiMetric.objects.create(
                     path=request.path,
                     method=request.method,
                     status_code=response.status_code,
                     duration_ms=duration_ms,
                     user=user if (user and user.is_authenticated) else None,
                 )
-            except Exception:
-                pass  # Avoid crashing request if DB is migrating
+                if response.streaming and request.path.startswith("/api/chat/stream/"):
+                    request._api_metric_id = metric.pk
+            except DatabaseError:
+                logger.exception("Could not persist API request metric.")
 
         return response
